@@ -1,0 +1,25 @@
+name: Daily Ping
+
+on:
+  schedule:
+    - cron: "0 0 * * *"  # 每天的午夜运行（UTC时间，需要根据时区调整）
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest  # 选择合适的运行环境
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.10  # 选择合适的Python版本
+
+      - name: Install dependencies
+        run: |
+          pip install ping3 requests
+
+      - name: Run Python script
+        run: python DnsParse.py 
