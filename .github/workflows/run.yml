@@ -24,4 +24,4 @@ jobs:
           pip install ping3 requests
 
       - name: Run Python script
-        run: python DnsParse.py 
+        run: python DailyJob.py
