@@ -1,6 +1,8 @@
 name: Daily Ping
 
 on:
+  push:
+    branches: [ "master" ]
   schedule:
     - cron: "0 0 * * *"  # 每天的午夜运行（UTC时间，需要根据时区调整）
 
