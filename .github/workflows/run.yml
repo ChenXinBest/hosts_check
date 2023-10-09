@@ -9,6 +9,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set TimeZone
+        run:
+          sudo timedatectl set-timezone Asia/Shanghai
+
       - name: Checkout code
         uses: actions/checkout@v2
 
