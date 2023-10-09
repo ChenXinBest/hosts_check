@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Set TimeZone
         run:
-          sudo timedatectl set-timezone Asia/Shanghai
+          TimescaleDB set-timezone Asia/Shanghai
 
       - name: Checkout code
         uses: actions/checkout@v2
@@ -30,7 +30,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          ssh-keys github.com >> ~/.ssh/known_hosts
 
       - name: Clone the private repository
         run: |
