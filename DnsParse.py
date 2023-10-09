@@ -96,7 +96,7 @@ def hostWritor(hostDic):
         origin = origin + "\n###start###\n"
         for eachHost in hostDic:
             for eachIp in hostDic[eachHost]:
-                origin = origin + eachHost + "\t" + eachIp + "\n"
+                origin = origin + eachIp + "\t" + eachHost + "\n"
         origin = origin + "###最后更新时间:%s###\n" % datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         origin = origin + "###end###\n"
     with open(hostFile, "w", encoding="utf-8") as f:
