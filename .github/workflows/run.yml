@@ -1,11 +1,8 @@
 name: Daily Ping
 
 on:
-  push:
-    branches:
-      - master
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 16 * * *"
 
 jobs:
   ping:
