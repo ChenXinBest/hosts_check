@@ -24,6 +24,7 @@ jobs:
       - name: Configure SSH key
         run: |
           mkdir -p ~/.ssh
+          apt install openssh-server
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keys github.com >> ~/.ssh/known_hosts
