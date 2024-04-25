@@ -1,9 +1,9 @@
 ###start###
-18.164.154.122	api.themoviedb.org
-18.164.154.124	api.themoviedb.org
-3.160.150.117	www.themoviedb.org
-3.160.150.29	www.themoviedb.org
-3.160.150.29	www.themoviedb.org
-3.160.150.117	www.themoviedb.org
-###最后更新时间:2024-04-24 16:12:24###
+18.154.132.8	api.themoviedb.org
+18.154.132.5	api.themoviedb.org
+18.154.144.60	www.themoviedb.org
+18.154.144.73	www.themoviedb.org
+18.154.144.60	www.themoviedb.org
+18.154.144.22	www.themoviedb.org
+###最后更新时间:2024-04-25 16:13:06###
 ###end###
