@@ -60,16 +60,18 @@ def analysis(domain, dns) -> list:
         print(e)
 
 
-# 写入host信息
-def hostWritor(hostDic):
-    origin = ""
-    origin = origin + "###start###\n"
-    for eachHost in hostDic:
-        for eachIp in hostDic[eachHost]:
-            origin = origin + eachIp + "\t" + eachHost + "\n"
-    origin = origin + "###最后更新时间:%s###\n" % datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    origin = origin + "###end###\n"
-    with open("hosts.txt","w",encoding="utf-8") as f:
+# 写入host信息  
+def hostWritor(hostDic):  
+    origin = ""  
+    origin += "###start###\n"  
+    for eachHost in hostDic:  
+        ips_set = set(hostDic[eachHost])  # 使用集合去重  
+        for eachIp in ips_set:  
+            # 明确使用英文字符的空格 ' '  
+            origin += f"{eachIp} {eachHost}\n"  # 这里使用了英文字符的空格  
+    origin += f"###最后更新时间:{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}###\n"  
+    origin += "###end###\n"  
+    with open("/app/output/hosts.txt", "w", encoding="utf-8") as f:  # 修改文件路径  
         f.write(origin)
 
 
