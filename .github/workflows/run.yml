@@ -1,8 +1,9 @@
 name: Daily Ping  
   
 on:  
-  schedule:  
-    - cron: "0 16 * * *"  
+  workflow_dispatch: # 允许手动触发工作流
+  # schedule:  
+    # - cron: "0 16 * * *"  
   
 jobs:  
   ping:  
