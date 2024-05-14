@@ -38,7 +38,7 @@ jobs:
       - name: Commit and push changes
         run: |
           cd hosts_check
-          git config user.email "git@daily.com"
+          git config user.email "1056349644@qq.com"
           git config user.name "Daily Job"
           git add .  # 添加生成的文件
           git commit -m "Add generated file"
