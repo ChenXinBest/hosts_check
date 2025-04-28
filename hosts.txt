@@ -1,17 +1,11 @@
 ###start###
-3.169.231.119	api.themoviedb.org
-3.169.231.116	api.themoviedb.org
-3.169.231.97	api.themoviedb.org
-3.169.231.17	api.themoviedb.org
-143.244.50.209	image.tmdb.org
-143.244.50.214	image.tmdb.org
-108.156.144.45	www.themoviedb.org
-108.156.144.60	www.themoviedb.org
+3.165.102.35	api.themoviedb.org
+3.165.102.110	api.themoviedb.org
+169.150.249.165	image.tmdb.org
+143.244.50.88	image.tmdb.org
 108.156.144.11	www.themoviedb.org
 108.156.144.39	www.themoviedb.org
-108.156.144.39	www.themoviedb.org
-108.156.144.45	www.themoviedb.org
-108.156.144.60	www.themoviedb.org
 108.156.144.11	www.themoviedb.org
-###最后更新时间:2025-04-28 00:00:13###
+108.156.144.45	www.themoviedb.org
+###最后更新时间:2025-04-29 00:00:33###
 ###end###
