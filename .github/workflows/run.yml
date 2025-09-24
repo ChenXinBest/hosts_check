@@ -52,6 +52,8 @@ jobs:
           echo "开始克隆……"
           git clone git@github.com:ChenXinBest/hosts_check.git
           echo "克隆完毕……"
+          ls -l
+          chmod 777 -R host_check
           cd hosts_check
           echo "开始执行更新脚本……"
           python3 DailyJob.py
