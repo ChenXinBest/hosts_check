@@ -54,6 +54,7 @@ jobs:
           echo "克隆完毕……"
           chmod 777 -R ./*
           ls -l
+          whoami
           # cd hosts_check
           echo "开始执行更新脚本……"
           python3 DailyJob.py
