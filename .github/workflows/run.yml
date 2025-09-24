@@ -53,7 +53,9 @@ jobs:
           git clone git@github.com:ChenXinBest/hosts_check.git
           echo "克隆完毕……"
           cd hosts_check
-          python DailyJob.py
+          echo "开始执行更新脚本……"
+          python3 DailyJob.py
+          echo "脚本运行完毕……"
           # 在这里运行 DailyJob.py 并生成文件
 
       - name: Commit and push changes
