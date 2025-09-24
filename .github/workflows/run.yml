@@ -64,4 +64,4 @@ jobs:
           git push origin master  # 推送到目标仓库
 
 env:
-  SSH_PRIVATE_KEY: ${{ secrets.SSH_KEY }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
