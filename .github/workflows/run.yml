@@ -24,10 +24,17 @@ jobs:
       - name: Run daily job
         run: python DailyJob.py
 
-      - name: Commit and push changes
+      - name: Configure SSH and push
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
           git config user.name "Daily Job"
           git config user.email "git@daily.com"
+          git remote set-url origin git@github.com:ChenXinBest/hosts_check.git
           git add hosts.txt
           git diff --staged --quiet || git commit -m "chore: update hosts $(date +%Y-%m-%d)"
           git push
