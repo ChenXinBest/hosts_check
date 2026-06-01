@@ -2,8 +2,8 @@
 import datetime
 import json
 import platform
+import subprocess
 import requests
-from ping3 import ping
 
 # dns解析用到的api
 api = "http://api.ip33.com/dns/resolver"
@@ -27,12 +27,20 @@ def pingBatch(ips):
 
 # ping ip返回ip是否连通
 def pingIp(ip) -> bool:
-    result = ping(ip)
-    if result is not None:
-        print(f"[√] IP:{ip}  可以ping通，延迟为{result}毫秒")
-        return True
-    else:
-        print(f"[×] IP:{ip}  无法ping通")
+    try:
+        # Linux/macOS: ping -c 1 -W 2 ip  | Windows: ping -n 1 -w 2000 ip
+        if platform.system() == 'Windows':
+            result = subprocess.run(['ping', '-n', '1', '-w', '2000', ip], capture_output=True, text=True, timeout=5)
+        else:
+            result = subprocess.run(['ping', '-c', '1', '-W', '2', ip], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            print(f"[√] IP:{ip} 可以ping通")
+            return True
+        else:
+            print(f"[×] IP:{ip} 无法ping通")
+            return False
+    except Exception as e:
+        print(f"[×] IP:{ip} ping异常: {e}")
         return False
 
 

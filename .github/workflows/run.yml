@@ -38,7 +38,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install ping3 requests
+          pip install requests
 
       - name: Configure SSH key
         run: |
