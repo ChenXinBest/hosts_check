@@ -4,8 +4,6 @@
 """
 import datetime
 import json
-import platform
-import subprocess
 from collections import defaultdict
 from typing import Optional
 
@@ -42,27 +40,31 @@ HEADERS = {
 }
 
 
-def ping_ip(ip: str) -> bool:
-    """Ping IP 地址，返回是否连通"""
+def check_ip_reachable(ip: str, domain: str, timeout: float = 5.0) -> bool:
+    """通过HTTP HEAD请求检查IP是否可达"""
     try:
-        cmd = (
-            ["ping", "-n", "1", "-w", "2000", ip]
-            if platform.system() == "Windows"
-            else ["ping", "-c", "1", "-W", "2", ip]
-        )
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-        reachable = result.returncode == 0
+        # 使用IP直连，Host header指明域名（用于虚拟主机场景）
+        url = f"http://{ip}"
+        response = requests.head(url, headers={"Host": domain}, timeout=timeout, allow_redirects=True)
+        # 2xx, 3xx 都算可达
+        reachable = 200 <= response.status_code < 400
         status = "√" if reachable else "×"
-        print(f"[{status}] IP:{ip} {'可以ping通' if reachable else '无法ping通'}")
+        print(f"[{status}] IP:{ip} ({domain}) {'可达' if reachable else '不可达'} [HTTP {response.status_code}]")
         return reachable
+    except requests.exceptions.Timeout:
+        print(f"[×] IP:{ip} ({domain}) 连接超时")
+        return False
+    except requests.exceptions.ConnectionError:
+        print(f"[×] IP:{ip} ({domain}) 连接被拒绝")
+        return False
     except Exception as e:
-        print(f"[×] IP:{ip} ping异常: {e}")
+        print(f"[×] IP:{ip} ({domain}) 检查异常: {e}")
         return False
 
 
-def filter_reachable_ips(ips: list[str]) -> list[str]:
-    """过滤出可ping通的IP"""
-    return [ip for ip in ips if ping_ip(ip)]
+def filter_reachable_ips(ips: list[str], domain: str) -> list[str]:
+    """过滤出可达的IP"""
+    return [ip for ip in ips if check_ip_reachable(ip, domain)]
 
 
 def resolve_domain(domain: str, dns: str) -> Optional[list[str]]:
@@ -101,7 +103,7 @@ def main() -> None:
         if not ips:
             continue
 
-        reachable_ips = filter_reachable_ips(ips)
+        reachable_ips = filter_reachable_ips(ips, host)
         if reachable_ips:
             result_dict[host].extend(reachable_ips)
 

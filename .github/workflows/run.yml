@@ -4,24 +4,6 @@ on:
   schedule:
     - cron: "0 16 * * *"
   workflow_dispatch:
-    inputs:
-      logLevel:
-        description: 'Log level'
-        required: true
-        default: 'warning'
-        type: choice
-        options:
-        - info
-        - warning
-        - debug
-      tags:
-        description: 'Test scenario tags'
-        required: false
-        type: boolean
-      environment:
-        description: 'Environment to run tests against'
-        type: environment
-        required: false
 
 jobs:
   ping:
@@ -29,46 +11,23 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.10.11
+          python-version: "3.12"
 
       - name: Install dependencies
-        run: |
-          pip install requests
+        run: pip install requests
 
-      - name: Configure SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-      - name: Clone the private repository
-        run: |
-          echo "开始克隆……"
-          git clone git@github.com:ChenXinBest/hosts_check.git
-          echo "克隆完毕……"
-          chmod 777 -R ./*
-          ls -l
-          whoami
-          # cd hosts_check
-          echo "开始执行更新脚本……"
-          python3 DailyJob.py
-          echo "脚本运行完毕……"
-          # 在这里运行 DailyJob.py 并生成文件
+      - name: Run daily job
+        run: python DailyJob.py
 
       - name: Commit and push changes
         run: |
-          cd hosts_check
-          git config user.email "git@daily.com"
           git config user.name "Daily Job"
-          git add .  # 添加生成的文件
-          git commit -m "Add generated file"
-          git push origin master  # 推送到目标仓库
-
-env:
-  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          git config user.email "git@daily.com"
+          git add hosts.txt
+          git diff --staged --quiet || git commit -m "chore: update hosts $(date +%Y-%m-%d)"
+          git push
