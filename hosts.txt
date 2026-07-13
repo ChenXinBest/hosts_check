@@ -1,20 +1,19 @@
 ###start###
-4.78.139.54	api.themoviedb.org
-18.65.159.57	www.themoviedb.org
-18.65.159.113	www.themoviedb.org
-18.65.159.129	www.themoviedb.org
-18.65.159.125	www.themoviedb.org
+3.166.244.95	www.themoviedb.org
+3.166.244.31	www.themoviedb.org
+3.166.244.28	www.themoviedb.org
+3.166.244.54	www.themoviedb.org
 3.160.150.117	www.themoviedb.org
 3.160.150.18	www.themoviedb.org
 3.160.150.29	www.themoviedb.org
 3.160.150.33	www.themoviedb.org
-140.82.112.5	api.github.com
+140.82.112.6	api.github.com
 20.205.243.168	api.github.com
 140.82.114.21	collector.github.com
-140.82.114.22	collector.github.com
-185.199.111.133	desktop.githubusercontent.com
+140.82.112.21	collector.github.com
 185.199.109.133	desktop.githubusercontent.com
 185.199.110.133	desktop.githubusercontent.com
+185.199.111.133	desktop.githubusercontent.com
 185.199.108.133	desktop.githubusercontent.com
 185.199.111.133	desktop.githubusercontent.com
 185.199.108.133	desktop.githubusercontent.com
@@ -26,5 +25,5 @@
 20.205.243.166	github.com
 150.171.110.70	vscode.dev
 150.171.110.68	vscode.dev
-###最后更新时间:2026-07-12 17:10:33###
+###最后更新时间:2026-07-13 18:02:26###
 ###end###
