@@ -19,10 +19,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install -r requirements.txt
 
       - name: Run daily job
-        run: python DailyJob.py
+        run: python -m hosts_check
 
       - name: Configure SSH and push
         env:
