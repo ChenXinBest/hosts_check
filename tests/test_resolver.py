@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from hosts_check.registry import _REGISTRY, discover_plugins, get, register
+from hosts_check.registry import register, get, discover_plugins, _REGISTRY
 from hosts_check.resolver import BaseResolver, ResolverConfig, ResolverError
 
 
