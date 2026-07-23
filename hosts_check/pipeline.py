@@ -10,6 +10,8 @@ from hosts_check.registry import discover_plugins, get
 from hosts_check.resolver import BaseResolver, ResolverConfig, ResolverError
 from hosts_check.writer import write_hosts_file
 
+import hosts_check.providers  # noqa: F401  # 触发 @register("ip33") 副作用
+
 
 def _log(msg: str) -> None:
     print(msg)
