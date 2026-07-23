@@ -1,6 +1,72 @@
-"""python -m hosts_check 入口（占位，Task 9 替换为完整实现）。"""
+"""python -m hosts_check 入口。"""
+from __future__ import annotations
+
+import argparse
 import sys
+from pathlib import Path
+
+from hosts_check.config import load_config
+from hosts_check.pipeline import run
+
+
+_DEFAULT_CONFIG = "config.yml"
+_DEFAULT_DOMAINS = "domains.yml"
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    p = argparse.ArgumentParser(prog="hosts_check")
+    p.add_argument(
+        "--config",
+        default=_DEFAULT_CONFIG,
+        help="配置文件路径（默认 config.yml）",
+    )
+    p.add_argument(
+        "--domains",
+        default=None,
+        help="域名文件路径（默认与 config 同目录下的 domains.yml）",
+    )
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+
+    # 让 plugins.<stem> 可被 import
+    cwd = Path.cwd()
+    if str(cwd) not in sys.path:
+        sys.path.insert(0, str(cwd))
+
+    try:
+        config = load_config(Path(args.config))
+    except FileNotFoundError as e:
+        print(f"[×] {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"[×] 配置解析失败: {e}", file=sys.stderr)
+        return 1
+
+    plugins_dir = cwd / "plugins"
+    if not plugins_dir.exists():
+        plugins_dir = None
+
+    try:
+        return run(config, plugins_dir=plugins_dir)
+    except KeyError as e:
+        print(f"[×] {e}", file=sys.stderr)
+        print(
+            "[!] 已注册的 provider: "
+            + ", ".join(sorted(_registered_names()))
+            or "(无)",
+            file=sys.stderr,
+        )
+        return 1
+
+
+def _registered_names() -> list[str]:
+    from hosts_check.registry import _REGISTRY
+
+    return list(_REGISTRY.keys())
+
 
 if __name__ == "__main__":
-    print("hosts_check package bootstrap OK")
-    sys.exit(0)
+    sys.exit(main())
