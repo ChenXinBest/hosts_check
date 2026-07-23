@@ -1,16 +1,19 @@
+# 启用的 provider 列表（按顺序使用；name 必须是被 @register 注册过的）
 providers:
   - name: ip33
     enabled: true
-    upstream_dns:
+    upstream_dns:               # 这个 provider 用哪些上游 DNS
       - 156.154.70.1
       - 208.67.222.222
-    extra:
+    extra:                      # provider 私有参数（透传到 ResolverConfig.extra）
       timeout: 10
 
+# 写入目标
 output:
   path: hosts.txt
-  keep_old_section: true
+  keep_old_section: true        # 是否保留 hosts.txt 中 ###start### 外的内容
 
+# 可达性检测
 reachability:
-  method: http_head
+  method: http_head             # 现阶段只支持 http_head，留扩展位
   timeout: 5.0
