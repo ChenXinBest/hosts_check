@@ -4,6 +4,7 @@ import pytest
 
 from hosts_check.registry import register, get, discover_plugins, _REGISTRY
 from hosts_check.resolver import BaseResolver, ResolverConfig, ResolverError
+from hosts_check.providers.ip33 import Ip33Resolver
 
 
 def test_base_resolver_cannot_be_instantiated_directly():
@@ -110,3 +111,40 @@ def test_discover_plugins_skips_underscore_files(tmp_path, monkeypatch):
 
     assert "real_plugin" in _REGISTRY
     assert "skip_me" not in _REGISTRY
+
+
+from hosts_check.providers.ip33 import Ip33Resolver
+
+
+def test_ip33_resolver_merges_results_from_multiple_upstream(mocker):
+    cfg = ResolverConfig(
+        name="ip33",
+        upstream_dns=["1.1.1.1", "2.2.2.2"],
+        extra={},
+    )
+
+    fake_responses = [
+        mocker.Mock(text='{"record": [{"ip": "9.9.9.9"}, {"ip": "8.8.8.8"}]}'),
+        mocker.Mock(text='{"record": [{"ip": "7.7.7.7"}]}'),
+    ]
+    mocker.patch("hosts_check.providers.ip33.requests.post", side_effect=fake_responses)
+
+    r = Ip33Resolver(cfg)
+    assert r.resolve("example.com", cfg) == ["9.9.9.9", "8.8.8.8", "7.7.7.7"]
+
+
+def test_ip33_resolver_raises_resolvererror_on_http_failure(mocker):
+    cfg = ResolverConfig(name="ip33", upstream_dns=["1.1.1.1"], extra={})
+
+    mocker.patch(
+        "hosts_check.providers.ip33.requests.post",
+        side_effect=RuntimeError("net down"),
+    )
+
+    r = Ip33Resolver(cfg)
+    with pytest.raises(ResolverError):
+        r.resolve("example.com", cfg)
+
+
+def test_ip33_resolver_is_registered():
+    assert Ip33Resolver.name == "ip33"
