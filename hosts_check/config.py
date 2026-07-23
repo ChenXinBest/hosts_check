@@ -1,0 +1,77 @@
+"""加载 YAML 配置 + domains，统一为 AppConfig。"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+@dataclass
+class ProviderConfig:
+    name: str
+    enabled: bool = True
+    upstream_dns: list[str] = field(default_factory=list)
+    extra: dict = field(default_factory=dict)
+
+
+@dataclass
+class OutputConfig:
+    path: str = "hosts.txt"
+    keep_old_section: bool = True
+
+
+@dataclass
+class ReachabilityConfig:
+    method: str = "http_head"
+    timeout: float = 5.0
+
+
+@dataclass
+class AppConfig:
+    providers: list[ProviderConfig]
+    output: OutputConfig
+    reachability: ReachabilityConfig
+    domains: list[str]
+
+
+def _load_yaml(path: Path) -> dict[str, Any]:
+    with open(path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data or {}
+
+
+def _parse_providers(raw: list[dict[str, Any]] | None) -> list[ProviderConfig]:
+    out: list[ProviderConfig] = []
+    for item in raw or []:
+        out.append(
+            ProviderConfig(
+                name=item["name"],
+                enabled=item.get("enabled", True),
+                upstream_dns=list(item.get("upstream_dns", []) or []),
+                extra=dict(item.get("extra", {}) or {}),
+            )
+        )
+    return out
+
+
+def load_config(config_path: Path) -> AppConfig:
+    """加载 config.yml + 同目录的 domains.yml，合并成 AppConfig。"""
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"config file not found: {config_path}")
+
+    domains_path = config_path.parent / "domains.yml"
+    if not domains_path.exists():
+        raise FileNotFoundError(f"domains file not found: {domains_path}")
+
+    cfg_raw = _load_yaml(config_path)
+    dom_raw = _load_yaml(domains_path)
+
+    return AppConfig(
+        providers=_parse_providers(cfg_raw.get("providers")),
+        output=OutputConfig(**(cfg_raw.get("output") or {})),
+        reachability=ReachabilityConfig(**(cfg_raw.get("reachability") or {})),
+        domains=list(dom_raw.get("domains", []) or []),
+    )
