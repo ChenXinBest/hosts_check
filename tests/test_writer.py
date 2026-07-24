@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import datetime
+from pathlib import Path
 
+from hosts_check import writer
 from hosts_check.config import OutputConfig
 from hosts_check.writer import write_hosts_file
 
@@ -82,3 +84,66 @@ def test_write_hosts_file_no_keep_old_section_writes_only_new(tmp_path):
     content = hosts_file.read_text(encoding="utf-8")
     assert "9.9.9.9" not in content
     assert content.startswith("###start###\n")
+
+
+def test_write_hosts_file_atomic_write_uses_replace(tmp_path, monkeypatch):
+    hosts_file = tmp_path / "hosts.txt"
+    cfg = OutputConfig(path=str(hosts_file), keep_old_section=False)
+    replace_calls = []
+    real_replace = writer.os.replace
+
+    def record_replace(source, destination):
+        replace_calls.append((source, destination))
+        real_replace(source, destination)
+
+    monkeypatch.setattr(writer.os, "replace", record_replace)
+
+    write_hosts_file({"fresh.example": ["5.5.5.5"]}, cfg)
+
+    assert replace_calls == [(tmp_path / ".hosts.txt.tmp", hosts_file)]
+    assert hosts_file.exists()
+    assert not (tmp_path / ".hosts.txt.tmp").exists()
+
+
+def test_write_hosts_file_cleans_up_tmp_on_failure(tmp_path, monkeypatch):
+    hosts_file = tmp_path / "hosts.txt"
+    cfg = OutputConfig(path=str(hosts_file), keep_old_section=False)
+    tmp_file = tmp_path / ".hosts.txt.tmp"
+    unlinked = []
+
+    def fail_write_text(self, *args, **kwargs):
+        raise OSError("disk full")
+
+    def record_unlink(self, *args, **kwargs):
+        unlinked.append((self, args, kwargs))
+
+    monkeypatch.setattr(Path, "write_text", fail_write_text)
+    monkeypatch.setattr(Path, "unlink", record_unlink)
+
+    try:
+        write_hosts_file({"fresh.example": ["5.5.5.5"]}, cfg)
+    except OSError as exc:
+        assert str(exc) == "disk full"
+    else:
+        raise AssertionError("write_hosts_file should raise the write error")
+
+    assert unlinked == [(tmp_file, (), {"missing_ok": True})]
+
+
+def test_write_hosts_file_strips_unmatched_marker_safely(tmp_path):
+    hosts_file = tmp_path / "hosts.txt"
+    old_content = "# user custom line\n###start###\n9.9.9.9\told.example\n"
+    hosts_file.write_text(old_content, encoding="utf-8")
+    cfg = OutputConfig(path=str(hosts_file), keep_old_section=True)
+    fixed = datetime.datetime(2026, 7, 23, 12, 0, 0)
+
+    write_hosts_file({"fresh.example": ["5.5.5.5"]}, cfg, now=fixed)
+
+    content = hosts_file.read_text(encoding="utf-8")
+    assert content == (
+        old_content
+        + "###start###\n"
+        + "5.5.5.5\tfresh.example\n"
+        + "###最后更新时间:2026-07-23 12:00:00###\n"
+        + "###end###\n"
+    )

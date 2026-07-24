@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import os
 from pathlib import Path
 
 from hosts_check.config import OutputConfig
@@ -23,13 +24,19 @@ def _strip_old_section(content: str) -> str:
     in_section = False
     for line in lines:
         if _START in line:
+            if in_section:
+                return content
             in_section = True
             continue
         if _END in line:
+            if not in_section:
+                return content
             in_section = False
             continue
         if not in_section:
             out.append(line)
+    if in_section:
+        return content
     return "".join(out)
 
 
@@ -62,4 +69,9 @@ def write_hosts_file(
 
     body = _render_body(host_dict, now)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(prefix + body, encoding="utf-8")
+    tmp_path = path.parent / f".{path.name}.tmp"
+    try:
+        tmp_path.write_text(prefix + body, encoding="utf-8")
+        os.replace(tmp_path, path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
