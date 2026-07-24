@@ -52,14 +52,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return run(config, plugins_dir=plugins_dir)
-    except KeyError as e:
-        print(f"[×] {e}", file=sys.stderr)
-        print(
-            "[!] 已注册的 provider: "
-            + ", ".join(sorted(_registered_names()))
-            or "(无)",
-            file=sys.stderr,
-        )
+    except Exception as e:
+        print(f"[×] pipeline crashed: {e}", file=sys.stderr)
         return 1
 
 

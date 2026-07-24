@@ -27,13 +27,17 @@ def _build_resolver_instances(
     for p in providers:
         if not p.enabled:
             continue
-        cls = get(p.name)
-        cfg = ResolverConfig(
-            name=p.name,
-            upstream_dns=list(p.upstream_dns),
-            extra=dict(p.extra),
-        )
-        out.append((cls(cfg), cfg))
+        try:
+            cls = get(p.name)
+            cfg = ResolverConfig(
+                name=p.name,
+                upstream_dns=list(p.upstream_dns),
+                extra=dict(p.extra),
+            )
+            out.append((cls(cfg), cfg))
+        except Exception as e:
+            _log(f"[!] provider {p.name} unavailable: {e}")
+            continue
     return out
 
 
@@ -48,6 +52,9 @@ def run(config: AppConfig, plugins_dir: Path | None = None) -> int:
                 ips = resolver.resolve(domain, rcfg)
             except ResolverError as e:
                 _log(f"[!] {resolver.name} on {domain}: {e}")
+                continue
+            except Exception as e:
+                _log(f"[!] {resolver.name} on {domain}: unexpected error: {e}")
                 continue
             raw[domain].extend(ips)
 

@@ -148,3 +148,75 @@ def test_pipeline_continues_when_one_resolver_raises(tmp_path, mocker):
     content = (tmp_path / "hosts.txt").read_text(encoding="utf-8")
     assert "2.2.2.2\ta.example" in content
     assert "1.1.1.1" not in content
+
+
+def test_pipeline_skips_provider_when_resolve_raises_unexpected_error(
+    tmp_path, mocker
+):
+    from hosts_check import registry
+
+    class FakeResolver:
+        name = "fake-unexpected"
+
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+        def resolve(self, domain, cfg):
+            if domain == "a.example":
+                raise RuntimeError("boom")
+            return ["2.2.2.2"]
+
+    registry._REGISTRY["fake-unexpected"] = FakeResolver
+    mocker.patch(
+        "hosts_check.pipeline.filter_reachable",
+        side_effect=lambda ips, domain, config: ips,
+    )
+    cfg = AppConfig(
+        providers=[
+            ProviderConfig(name="fake-unexpected", upstream_dns=["1.1.1.1"]),
+        ],
+        output=OutputConfig(path=str(tmp_path / "hosts.txt"), keep_old_section=False),
+        reachability=ReachabilityConfig(),
+        domains=["a.example", "b.example"],
+    )
+
+    rc = run(cfg, plugins_dir=None)
+
+    assert rc == 0
+    content = (tmp_path / "hosts.txt").read_text(encoding="utf-8")
+    assert "2.2.2.2\tb.example" in content
+    assert "a.example" not in content
+
+
+def test_pipeline_handles_plugin_failure_gracefully(tmp_path, mocker):
+    from hosts_check import registry
+
+    class GoodResolver:
+        name = "good-after-unavailable"
+
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+        def resolve(self, domain, cfg):
+            return ["3.3.3.3"]
+
+    registry._REGISTRY["good-after-unavailable"] = GoodResolver
+    mocker.patch(
+        "hosts_check.pipeline.filter_reachable",
+        return_value=["3.3.3.3"],
+    )
+    cfg = AppConfig(
+        providers=[
+            ProviderConfig(name="unavailable-provider"),
+            ProviderConfig(name="good-after-unavailable"),
+        ],
+        output=OutputConfig(path=str(tmp_path / "hosts.txt"), keep_old_section=False),
+        reachability=ReachabilityConfig(),
+        domains=["a.example"],
+    )
+
+    rc = run(cfg, plugins_dir=None)
+
+    assert rc == 0
+    content = (tmp_path / "hosts.txt").read_text(encoding="utf-8")
+    assert "3.3.3.3\ta.example" in content
