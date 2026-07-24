@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import requests
 
 from hosts_check.config import ReachabilityConfig
@@ -59,3 +60,29 @@ def test_filter_reachable_keeps_only_responding_ips(mocker):
     cfg = ReachabilityConfig(method="http_head", timeout=5.0)
     result = filter_reachable(["1.1.1.1", "2.2.2.2", "3.3.3.3"], "example.com", cfg)
     assert result == ["1.1.1.1", "3.3.3.3"]
+
+
+def test_check_ip_reachable_rejects_unknown_method():
+    with pytest.raises(ValueError, match="unsupported reachability method"):
+        check_ip_reachable("1.2.3.4", "example.com", method="ping")
+
+
+def test_check_ip_reachable_logs_success_to_stdout(mocker, capsys):
+    mocker.patch(
+        "hosts_check.reachability.requests.head",
+        return_value=mocker.Mock(status_code=200),
+    )
+
+    assert check_ip_reachable("1.2.3.4", "example.com") is True
+    assert "[OK]" in capsys.readouterr().out
+
+
+def test_check_ip_reachable_logs_timeout_to_stderr_or_stdout(mocker, capsys):
+    mocker.patch(
+        "hosts_check.reachability.requests.head",
+        side_effect=requests.exceptions.Timeout(),
+    )
+
+    assert check_ip_reachable("1.2.3.4", "example.com") is False
+    captured = capsys.readouterr()
+    assert "连接超时" in captured.out or "连接超时" in captured.err

@@ -6,12 +6,16 @@ import requests
 from hosts_check.config import ReachabilityConfig
 
 
-def check_ip_reachable(ip: str, domain: str, timeout: float = 5.0) -> bool:
-    """通过 HTTP HEAD 检查 IP 是否可达。
+def check_ip_reachable(
+    ip: str,
+    domain: str,
+    timeout: float = 5.0,
+    method: str = "http_head",
+) -> bool:
+    """通过 HTTP HEAD 检查 IP 是否可达，当前仅支持 http_head。"""
+    if method != "http_head":
+        raise ValueError(f"unsupported reachability method: {method!r}")
 
-    使用 IP 直连，Host header 指明域名（用于虚拟主机场景）。
-    2xx/3xx 视为可达。
-    """
     try:
         response = requests.head(
             f"http://{ip}",
@@ -19,10 +23,20 @@ def check_ip_reachable(ip: str, domain: str, timeout: float = 5.0) -> bool:
             timeout=timeout,
             allow_redirects=True,
         )
-        return 200 <= response.status_code < 400
-    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+        reachable = 200 <= response.status_code < 400
+        print(
+            f"[{'OK' if reachable else '×'}] IP:{ip} ({domain}) "
+            f"{'可达' if reachable else '不可达'} [HTTP {response.status_code}]"
+        )
+        return reachable
+    except requests.exceptions.Timeout:
+        print(f"[×] IP:{ip} ({domain}) 连接超时")
         return False
-    except Exception:
+    except requests.exceptions.ConnectionError:
+        print(f"[×] IP:{ip} ({domain}) 连接被拒绝")
+        return False
+    except Exception as e:
+        print(f"[×] IP:{ip} ({domain}) 检查异常: {e}")
         return False
 
 
@@ -30,4 +44,6 @@ def filter_reachable(
     ips: list[str], domain: str, cfg: ReachabilityConfig
 ) -> list[str]:
     """过滤出可达的 IP，按原顺序保留。"""
-    return [ip for ip in ips if check_ip_reachable(ip, domain, cfg.timeout)]
+    return [
+        ip for ip in ips if check_ip_reachable(ip, domain, cfg.timeout, cfg.method)
+    ]
