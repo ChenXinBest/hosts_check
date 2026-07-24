@@ -56,13 +56,21 @@ def _parse_providers(raw: list[dict[str, Any]] | None) -> list[ProviderConfig]:
     return out
 
 
-def load_config(config_path: Path) -> AppConfig:
-    """加载 config.yml + 同目录的 domains.yml，合并成 AppConfig。"""
+def load_config(
+    config_path: Path,
+    domains_path: Path | None = None,
+) -> AppConfig:
+    """加载 config.yml + domains.yml，合并成 AppConfig。
+
+    domains_path 未指定时，使用 config_path 同目录下的 domains.yml。
+    """
     config_path = Path(config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"config file not found: {config_path}")
 
-    domains_path = config_path.parent / "domains.yml"
+    if domains_path is None:
+        domains_path = config_path.parent / "domains.yml"
+    domains_path = Path(domains_path)
     if not domains_path.exists():
         raise FileNotFoundError(f"domains file not found: {domains_path}")
 

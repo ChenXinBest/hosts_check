@@ -98,3 +98,22 @@ def test_load_config_missing_domains_file_raises(tmp_path: Path):
 
     with pytest.raises(FileNotFoundError):
         load_config(tmp_path / "config.yml")
+
+
+def test_load_config_custom_domains_path(tmp_path: Path):
+    _write(tmp_path / "config.yml", "providers: []\n")
+    _write(
+        tmp_path / "domains.yml",
+        "domains:\n  - default.example\n",
+    )
+    _write(
+        tmp_path / "custom_domains.yml",
+        "domains:\n  - custom1.example\n  - custom2.example\n",
+    )
+
+    cfg = load_config(
+        tmp_path / "config.yml",
+        domains_path=tmp_path / "custom_domains.yml",
+    )
+
+    assert cfg.domains == ["custom1.example", "custom2.example"]

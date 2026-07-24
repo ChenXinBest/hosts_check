@@ -37,7 +37,8 @@ def main(argv: list[str] | None = None) -> int:
         sys.path.insert(0, str(cwd))
 
     try:
-        config = load_config(Path(args.config))
+        domains_path = Path(args.domains) if args.domains else None
+        config = load_config(Path(args.config), domains_path=domains_path)
     except FileNotFoundError as e:
         print(f"[×] {e}", file=sys.stderr)
         return 1
