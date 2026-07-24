@@ -15,16 +15,16 @@ def test_write_hosts_file_basic_format(tmp_path):
 
     write_hosts_file(host_dict, cfg, now=fixed)
 
-    content = (tmp_path / "hosts.txt").read_text(encoding="utf-8")
-    expected = (
+    content_bytes = (tmp_path / "hosts.txt").read_bytes()
+    expected_bytes = (
         "###start###\n"
         "1.1.1.1\ta.example\n"
         "2.2.2.2\ta.example\n"
         "3.3.3.3\tb.example\n"
         "###最后更新时间:2026-07-23 12:00:00###\n"
         "###end###\n"
-    )
-    assert content == expected
+    ).encode("utf-8")
+    assert content_bytes == expected_bytes
 
 
 def test_write_hosts_file_empty_dict(tmp_path):
@@ -33,13 +33,13 @@ def test_write_hosts_file_empty_dict(tmp_path):
 
     write_hosts_file({}, cfg, now=fixed)
 
-    content = (tmp_path / "hosts.txt").read_text(encoding="utf-8")
-    expected = (
+    content_bytes = (tmp_path / "hosts.txt").read_bytes()
+    expected_bytes = (
         "###start###\n"
         "###最后更新时间:2026-01-01 00:00:00###\n"
         "###end###\n"
-    )
-    assert content == expected
+    ).encode("utf-8")
+    assert content_bytes == expected_bytes
 
 
 def test_write_hosts_file_keep_old_section_strips_existing(tmp_path):
@@ -60,11 +60,11 @@ def test_write_hosts_file_keep_old_section_strips_existing(tmp_path):
 
     write_hosts_file(host_dict, cfg, now=fixed)
 
-    content = hosts_file.read_text(encoding="utf-8")
-    assert content.startswith("# user custom line 1\n# user custom line 2\n")
-    assert "9.9.9.9" not in content
-    assert "5.5.5.5\tfresh.example\n" in content
-    assert "###最后更新时间:2026-07-23 12:00:00###" in content
+    content_bytes = hosts_file.read_bytes()
+    assert content_bytes.startswith(b"# user custom line 1\n# user custom line 2\n")
+    assert b"9.9.9.9" not in content_bytes
+    assert b"5.5.5.5\tfresh.example\n" in content_bytes
+    assert "###最后更新时间:2026-07-23 12:00:00###".encode("utf-8") in content_bytes
 
 
 def test_write_hosts_file_no_keep_old_section_writes_only_new(tmp_path):
@@ -81,9 +81,9 @@ def test_write_hosts_file_no_keep_old_section_writes_only_new(tmp_path):
 
     write_hosts_file(host_dict, cfg, now=fixed)
 
-    content = hosts_file.read_text(encoding="utf-8")
-    assert "9.9.9.9" not in content
-    assert content.startswith("###start###\n")
+    content_bytes = hosts_file.read_bytes()
+    assert b"9.9.9.9" not in content_bytes
+    assert content_bytes.startswith(b"###start###\n")
 
 
 def test_write_hosts_file_atomic_write_uses_replace(tmp_path, monkeypatch):
@@ -139,11 +139,12 @@ def test_write_hosts_file_strips_unmatched_marker_safely(tmp_path):
 
     write_hosts_file({"fresh.example": ["5.5.5.5"]}, cfg, now=fixed)
 
-    content = hosts_file.read_text(encoding="utf-8")
-    assert content == (
+    content_bytes = hosts_file.read_bytes()
+    expected_bytes = (
         old_content
         + "###start###\n"
         + "5.5.5.5\tfresh.example\n"
         + "###最后更新时间:2026-07-23 12:00:00###\n"
         + "###end###\n"
-    )
+    ).encode("utf-8")
+    assert content_bytes == expected_bytes

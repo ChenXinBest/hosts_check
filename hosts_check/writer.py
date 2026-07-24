@@ -18,25 +18,30 @@ def _format_now(now: datetime.datetime) -> str:
 
 
 def _strip_old_section(content: str) -> str:
-    """剥离 ###start### 与 ###end### 之间的全部内容，保留其外的所有行。"""
-    lines = content.splitlines(keepends=True)
+    """剥离 ###start### 与 ###end### 之间的全部内容，保留其外的所有行。
+
+    行结束符统一标准化为 LF，避免跨平台差异污染字节级输出。
+    未配对的 marker 也走 normalize 路径，保证字节级输出稳定。
+    """
+    normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.splitlines(keepends=True)
     out: list[str] = []
     in_section = False
     for line in lines:
         if _START in line:
             if in_section:
-                return content
+                return normalized
             in_section = True
             continue
         if _END in line:
             if not in_section:
-                return content
+                return normalized
             in_section = False
             continue
         if not in_section:
             out.append(line)
     if in_section:
-        return content
+        return normalized
     return "".join(out)
 
 
@@ -65,13 +70,13 @@ def write_hosts_file(
     path = Path(cfg.path)
     prefix = ""
     if cfg.keep_old_section and path.exists():
-        prefix = _strip_old_section(path.read_text(encoding="utf-8"))
+        prefix = _strip_old_section(path.read_text(encoding="utf-8", newline=""))
 
     body = _render_body(host_dict, now)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.parent / f".{path.name}.tmp"
     try:
-        tmp_path.write_text(prefix + body, encoding="utf-8")
+        tmp_path.write_text(prefix + body, encoding="utf-8", newline="")
         os.replace(tmp_path, path)
     finally:
         tmp_path.unlink(missing_ok=True)
