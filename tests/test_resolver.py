@@ -148,3 +148,52 @@ def test_ip33_resolver_raises_resolvererror_on_http_failure(mocker):
 
 def test_ip33_resolver_is_registered():
     assert Ip33Resolver.name == "ip33"
+
+
+def test_ip33_resolver_continues_when_first_upstream_fails(mocker):
+    cfg = ResolverConfig(
+        name="ip33",
+        upstream_dns=["1.1.1.1", "2.2.2.2"],
+        extra={},
+    )
+    successful_response = mocker.Mock(text='{"record": [{"ip": "7.7.7.7"}]}')
+    mocker.patch(
+        "hosts_check.providers.ip33.requests.post",
+        side_effect=[RuntimeError("first failed"), successful_response],
+    )
+
+    assert Ip33Resolver(cfg).resolve("example.com", cfg) == ["7.7.7.7"]
+
+
+def test_ip33_resolver_returns_partial_results(mocker):
+    cfg = ResolverConfig(
+        name="ip33",
+        upstream_dns=["1.1.1.1", "2.2.2.2"],
+        extra={},
+    )
+    responses = [
+        mocker.Mock(text='{"record": [{"ip": "9.9.9.9"}]}'),
+        mocker.Mock(text='{"record": [{"ip": "7.7.7.7"}]}'),
+    ]
+    mocker.patch("hosts_check.providers.ip33.requests.post", side_effect=responses)
+
+    assert Ip33Resolver(cfg).resolve("example.com", cfg) == ["9.9.9.9", "7.7.7.7"]
+
+
+def test_ip33_resolver_raises_when_all_upstreams_fail(mocker):
+    cfg = ResolverConfig(
+        name="ip33",
+        upstream_dns=["1.1.1.1", "2.2.2.2"],
+        extra={},
+    )
+    mocker.patch(
+        "hosts_check.providers.ip33.requests.post",
+        side_effect=[RuntimeError("first failed"), RuntimeError("second failed")],
+    )
+
+    with pytest.raises(ResolverError) as exc_info:
+        Ip33Resolver(cfg).resolve("example.com", cfg)
+
+    message = str(exc_info.value)
+    assert "1.1.1.1: first failed" in message
+    assert "2.2.2.2: second failed" in message

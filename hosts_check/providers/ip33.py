@@ -26,6 +26,7 @@ class Ip33Resolver(BaseResolver):
 
     def resolve(self, domain: str, cfg: ResolverConfig) -> list[str]:
         ips: list[str] = []
+        errors: list[str] = []
         for dns in cfg.upstream_dns:
             try:
                 resp = requests.post(
@@ -34,10 +35,15 @@ class Ip33Resolver(BaseResolver):
                     headers=_HEADERS,
                     timeout=_TIMEOUT,
                 )
+                resp.raise_for_status()
                 payload: dict[str, Any] = json.loads(resp.text)
                 ips.extend(record["ip"] for record in payload.get("record", []))
             except Exception as e:
-                raise ResolverError(
-                    f"ip33 resolve failed for {domain} via {dns}: {e}"
-                ) from e
+                errors.append(f"{dns}: {e}")
+                continue
+
+        if not ips:
+            raise ResolverError(
+                f"ip33 resolve failed for {domain} (all upstreams failed): {errors}"
+            )
         return ips
