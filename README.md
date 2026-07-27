@@ -4,10 +4,19 @@
 
 ## 使用
 
-- 直接使用 hosts： 复制 [HOST每日更新](https://raw.githubusercontent.com/ChenXinBest/hosts_check/master/hosts.txt) 到你的 hosts 文件
-- 手动运行： 在仓库根目录执行 `python -m hosts_check`（需先 `pip install -r requirements.txt`）
+- **直接用 hosts**：复制 [HOST每日更新](https://raw.githubusercontent.com/ChenXinBest/hosts_check/master/hosts.txt) 到你的 hosts 文件
+- **手动运行**：
+  ```bash
+  pip install -r requirements.txt
+  python -m dnsprobe
+  ```
+  或装包后直接：
+  ```bash
+  pip install -e .
+  dnsprobe
+  ```
 
-## 配置文件
+## 配置
 
 - `config.yml` —— 启用哪些 provider、每个 provider 的上游 DNS、输出与可达性参数
 - `domains.yml` —— 待解析的域名列表
@@ -19,14 +28,14 @@
 在 `plugins/` 目录下新建 `.py` 文件，继承 `BaseResolver` 并用 `@register("name")` 装饰：
 
 ```python
-from hosts_check.registry import register
-from hosts_check.resolver import BaseResolver, ResolverConfig, ResolverError
+from dnsprobe.registry import register
+from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
 
 
 @register("my_resolver")
 class MyResolver(BaseResolver):
     def resolve(self, domain: str, cfg: ResolverConfig) -> list[str]:
-        # cfg.upstream_dns: list[str] —— 上游 DNS 服务器列表
+        # cfg.upstream_dns: list[str] —— 上游 DNS 服务器列表（仅对支持多上游 DNS 的 provider 有意义）
         # cfg.extra: dict —— 你的私有参数
         # ...
         return ["1.2.3.4"]
@@ -44,3 +53,39 @@ providers:
 ```
 
 详见 `plugins/README.md`。
+
+## 开发
+
+### 环境要求
+
+- Python 3.10+（GitHub Action 用 3.12）
+
+### 开发安装
+
+```bash
+pip install -r requirements-dev.txt
+pip install -e .
+```
+
+### 跑测试
+
+```bash
+python -m pytest tests/ -v
+```
+
+### 项目结构
+
+```
+src/dnsprobe/        Python 包（import 路径 = dnsprobe）
+plugins/             第三方/本地扩展（被扫描）
+tests/               单元 + 集成测试
+docs/                设计文档与历史
+```
+
+### GitHub Action 自动更新
+
+`.github/workflows/run.yml` 每天 16:00 UTC 自动跑 `python -m dnsprobe` 并推送 `hosts.txt` 回 master。也可手动触发（Actions → Daily Ping → Run workflow）。
+
+### 设计文档
+
+`docs/superpowers/specs/` 与 `docs/superpowers/plans/` 记录项目设计与实现计划。
