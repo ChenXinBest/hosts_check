@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 
 import pytest
+import requests
 
 from dnsprobe.registry import register, get, discover_plugins, _REGISTRY
 from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
@@ -126,87 +127,74 @@ def test_discover_plugins_skips_underscore_files(tmp_path, monkeypatch):
 from dnsprobe.providers.ip33 import Ip33Resolver
 
 
-def test_ip33_resolver_merges_results_from_multiple_upstream(mocker):
-    cfg = ResolverConfig(
-        name="ip33",
-        upstream_dns=["1.1.1.1", "2.2.2.2"],
-        extra={},
-    )
-
-    fake_responses = [
-        mocker.Mock(text='{"record": [{"ip": "9.9.9.9"}, {"ip": "8.8.8.8"}]}'),
-        mocker.Mock(text='{"record": [{"ip": "7.7.7.7"}]}'),
-    ]
-    mocker.patch("dnsprobe.providers.ip33.requests.post", side_effect=fake_responses)
-
-    r = Ip33Resolver(cfg)
-    assert r.resolve("example.com", cfg) == ["9.9.9.9", "8.8.8.8", "7.7.7.7"]
-
-
-def test_ip33_resolver_raises_resolvererror_on_http_failure(mocker):
-    cfg = ResolverConfig(name="ip33", upstream_dns=["1.1.1.1"], extra={})
-
+def test_ip33_resolver_returns_ips_on_success(mocker):
+    """type=3 响应应返回 ips[*].ip 列表。"""
+    cfg = ResolverConfig(name="ip33", upstream_dns=[], extra={})
     mocker.patch(
         "dnsprobe.providers.ip33.requests.post",
-        side_effect=RuntimeError("net down"),
+        return_value=mocker.Mock(
+            status_code=200,
+            json=lambda: {"type": 3, "ips": [{"ip": "1.1.1.1", "area": "X"}, {"ip": "2.2.2.2", "area": "Y"}]},
+            raise_for_status=lambda: None,
+        ),
     )
+    r = Ip33Resolver(cfg)
+    assert r.resolve("example.com", cfg) == ["1.1.1.1", "2.2.2.2"]
 
+
+def test_ip33_resolver_posts_with_s_param_and_headers(mocker):
+    """POST data={s: domain} + headers 含 Origin/Referer/X-Requested-With。"""
+    cfg = ResolverConfig(name="ip33", upstream_dns=[], extra={})
+    mock_post = mocker.patch(
+        "dnsprobe.providers.ip33.requests.post",
+        return_value=mocker.Mock(
+            status_code=200,
+            json=lambda: {"type": 3, "ips": []},
+            raise_for_status=lambda: None,
+        ),
+    )
+    r = Ip33Resolver(cfg)
+    r.resolve("github.com", cfg)
+
+    call = mock_post.call_args
+    assert call.kwargs["data"] == {"s": "github.com"}
+    headers = call.kwargs["headers"]
+    assert headers["Origin"] == "https://www.ip33.com"
+    assert headers["Referer"] == "https://www.ip33.com/"
+    assert headers["X-Requested-With"] == "XMLHttpRequest"
+
+
+def test_ip33_resolver_raises_on_type_4_failure(mocker):
+    """type=4 响应（解析失败）应抛 ResolverError。"""
+    cfg = ResolverConfig(name="ip33", upstream_dns=[], extra={})
+    mocker.patch(
+        "dnsprobe.providers.ip33.requests.post",
+        return_value=mocker.Mock(
+            status_code=200,
+            json=lambda: {"type": 4},
+            raise_for_status=lambda: None,
+        ),
+    )
+    r = Ip33Resolver(cfg)
+    with pytest.raises(ResolverError):
+        r.resolve("nonexistent.example.invalid", cfg)
+
+
+def test_ip33_resolver_raises_on_http_failure(mocker):
+    """HTTP 请求异常应抛 ResolverError。"""
+    cfg = ResolverConfig(name="ip33", upstream_dns=[], extra={})
+    mocker.patch(
+        "dnsprobe.providers.ip33.requests.post",
+        side_effect=requests.exceptions.ConnectionError(),
+    )
     r = Ip33Resolver(cfg)
     with pytest.raises(ResolverError):
         r.resolve("example.com", cfg)
 
 
 def test_ip33_resolver_is_registered():
-    assert Ip33Resolver.name == "ip33"
-
-
-def test_ip33_resolver_continues_when_first_upstream_fails(mocker):
-    cfg = ResolverConfig(
-        name="ip33",
-        upstream_dns=["1.1.1.1", "2.2.2.2"],
-        extra={},
-    )
-    successful_response = mocker.Mock(text='{"record": [{"ip": "7.7.7.7"}]}')
-    mocker.patch(
-        "dnsprobe.providers.ip33.requests.post",
-        side_effect=[RuntimeError("first failed"), successful_response],
-    )
-
-    assert Ip33Resolver(cfg).resolve("example.com", cfg) == ["7.7.7.7"]
-
-
-def test_ip33_resolver_returns_partial_results(mocker):
-    cfg = ResolverConfig(
-        name="ip33",
-        upstream_dns=["1.1.1.1", "2.2.2.2"],
-        extra={},
-    )
-    responses = [
-        mocker.Mock(text='{"record": [{"ip": "9.9.9.9"}]}'),
-        mocker.Mock(text='{"record": [{"ip": "7.7.7.7"}]}'),
-    ]
-    mocker.patch("dnsprobe.providers.ip33.requests.post", side_effect=responses)
-
-    assert Ip33Resolver(cfg).resolve("example.com", cfg) == ["9.9.9.9", "7.7.7.7"]
-
-
-def test_ip33_resolver_raises_when_all_upstreams_fail(mocker):
-    cfg = ResolverConfig(
-        name="ip33",
-        upstream_dns=["1.1.1.1", "2.2.2.2"],
-        extra={},
-    )
-    mocker.patch(
-        "dnsprobe.providers.ip33.requests.post",
-        side_effect=[RuntimeError("first failed"), RuntimeError("second failed")],
-    )
-
-    with pytest.raises(ResolverError) as exc_info:
-        Ip33Resolver(cfg).resolve("example.com", cfg)
-
-    message = str(exc_info.value)
-    assert "1.1.1.1: first failed" in message
-    assert "2.2.2.2: second failed" in message
+    from dnsprobe.providers.ip33 import Ip33Resolver  # fixture pop sys.modules 后本地重绑，保证 is 同一对象
+    assert get("ip33") is Ip33Resolver
 
 
 from dnsprobe._bootstrap import register_builtin_providers
