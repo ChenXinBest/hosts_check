@@ -4,13 +4,12 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
+from dnsprobe._bootstrap import register_builtin_providers
 from dnsprobe.config import AppConfig
 from dnsprobe.reachability import filter_reachable
 from dnsprobe.registry import discover_plugins, get
 from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
 from dnsprobe.writer import write_hosts_file
-
-import dnsprobe.providers  # noqa: F401  # 触发 @register("ip33") 副作用
 
 
 def _log(msg: str) -> None:
@@ -20,6 +19,7 @@ def _log(msg: str) -> None:
 def _build_resolver_instances(
     providers, plugins_dir: Path | None
 ) -> list[tuple[BaseResolver, ResolverConfig]]:
+    register_builtin_providers()
     if plugins_dir is not None:
         discover_plugins(plugins_dir)
 

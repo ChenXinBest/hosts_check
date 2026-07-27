@@ -5,6 +5,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from dnsprobe._bootstrap import register_builtin_providers
 from dnsprobe.config import load_config
 from dnsprobe.pipeline import run
 
@@ -45,6 +46,8 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         print(f"[×] 配置解析失败: {e}", file=sys.stderr)
         return 1
+
+    register_builtin_providers()
 
     plugins_dir = cwd / "plugins"
     if not plugins_dir.exists():

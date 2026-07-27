@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from dnsprobe.registry import register, get, discover_plugins, _REGISTRY
@@ -45,10 +47,18 @@ def test_resolver_error_is_exception():
 
 @pytest.fixture(autouse=True)
 def _clean_registry():
-    """每个测试前清空注册表，避免污染。"""
+    """每个测试前清空注册表与 ip33 模块缓存，避免污染。"""
     _REGISTRY.clear()
+    sys.modules.pop("dnsprobe.providers.ip33", None)
+    providers_pkg = sys.modules.get("dnsprobe.providers")
+    if providers_pkg is not None:
+        providers_pkg.__dict__.pop("ip33", None)
     yield
     _REGISTRY.clear()
+    sys.modules.pop("dnsprobe.providers.ip33", None)
+    providers_pkg = sys.modules.get("dnsprobe.providers")
+    if providers_pkg is not None:
+        providers_pkg.__dict__.pop("ip33", None)
 
 
 def test_register_decorator_registers_class():
@@ -197,3 +207,22 @@ def test_ip33_resolver_raises_when_all_upstreams_fail(mocker):
     message = str(exc_info.value)
     assert "1.1.1.1: first failed" in message
     assert "2.2.2.2: second failed" in message
+
+
+from dnsprobe._bootstrap import register_builtin_providers
+
+
+def test_register_builtin_providers_adds_ip33_to_registry():
+    """显式调用 register_builtin_providers() 后 _REGISTRY 含 ip33。"""
+    _REGISTRY.pop("ip33", None)  # 先清理（防 fixture 残留）
+    register_builtin_providers()
+    assert "ip33" in _REGISTRY
+    assert _REGISTRY["ip33"].__name__ == "Ip33Resolver"
+
+
+def test_register_builtin_providers_is_idempotent():
+    """重复调用不抛错、不重复注册。"""
+    register_builtin_providers()
+    register_builtin_providers()
+    # 同一 class object 仍在 _REGISTRY
+    assert _REGISTRY["ip33"].__name__ == "Ip33Resolver"
