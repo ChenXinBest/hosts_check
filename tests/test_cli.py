@@ -40,8 +40,8 @@ reachability:
     (plugins / "fake_cli.py").write_text(
         textwrap.dedent(
             """\
-            from hosts_check.registry import register
-            from hosts_check.resolver import BaseResolver, ResolverConfig
+            from dnsprobe.registry import register
+            from dnsprobe.resolver import BaseResolver, ResolverConfig
 
             @register("fake_cli")
             class FakeCli(BaseResolver):
@@ -59,7 +59,7 @@ reachability:
         [
             sys.executable,
             "-m",
-            "hosts_check",
+            "dnsprobe",
             "--config",
             str(config),
             "--domains",

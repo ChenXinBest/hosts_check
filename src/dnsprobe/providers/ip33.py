@@ -6,8 +6,8 @@ from typing import Any
 
 import requests
 
-from hosts_check.registry import register
-from hosts_check.resolver import BaseResolver, ResolverConfig, ResolverError
+from dnsprobe.registry import register
+from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
 
 _API = "http://api.ip33.com/dns/resolver"
 _TIMEOUT = 10

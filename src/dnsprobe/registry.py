@@ -5,7 +5,7 @@ import importlib
 from pathlib import Path
 from typing import Callable
 
-from hosts_check.resolver import BaseResolver
+from dnsprobe.resolver import BaseResolver
 
 _REGISTRY: dict[str, type[BaseResolver]] = {}
 

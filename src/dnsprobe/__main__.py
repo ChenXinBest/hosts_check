@@ -1,12 +1,12 @@
-"""python -m hosts_check 入口。"""
+"""python -m dnsprobe 入口。"""
 from __future__ import annotations
 
 import argparse
 import sys
 from pathlib import Path
 
-from hosts_check.config import load_config
-from hosts_check.pipeline import run
+from dnsprobe.config import load_config
+from dnsprobe.pipeline import run
 
 
 _DEFAULT_CONFIG = "config.yml"
@@ -14,7 +14,7 @@ _DEFAULT_DOMAINS = "domains.yml"
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="hosts_check")
+    p = argparse.ArgumentParser(prog="dnsprobe")
     p.add_argument(
         "--config",
         default=_DEFAULT_CONFIG,
@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _registered_names() -> list[str]:
-    from hosts_check.registry import _REGISTRY
+    from dnsprobe.registry import _REGISTRY
 
     return list(_REGISTRY.keys())
 

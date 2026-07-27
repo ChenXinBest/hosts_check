@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import requests
 
-from hosts_check.config import ReachabilityConfig
+from dnsprobe.config import ReachabilityConfig
 
 
 def check_ip_reachable(

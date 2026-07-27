@@ -21,8 +21,8 @@
 """
 from __future__ import annotations
 
-from hosts_check.registry import register
-from hosts_check.resolver import BaseResolver, ResolverConfig
+from dnsprobe.registry import register
+from dnsprobe.resolver import BaseResolver, ResolverConfig
 
 
 @register("example")

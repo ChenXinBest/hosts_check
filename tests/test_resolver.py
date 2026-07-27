@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from hosts_check.registry import register, get, discover_plugins, _REGISTRY
-from hosts_check.resolver import BaseResolver, ResolverConfig, ResolverError
-from hosts_check.providers.ip33 import Ip33Resolver
+from dnsprobe.registry import register, get, discover_plugins, _REGISTRY
+from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
+from dnsprobe.providers.ip33 import Ip33Resolver
 
 
 def test_base_resolver_cannot_be_instantiated_directly():
@@ -72,8 +72,8 @@ def test_discover_plugins_imports_module_and_triggers_register(tmp_path, monkeyp
     plugin_dir.mkdir()
     plugin_file = plugin_dir / "my_plugin.py"
     plugin_file.write_text(
-        "from hosts_check.resolver import BaseResolver, ResolverConfig\n"
-        "from hosts_check.registry import register\n"
+        "from dnsprobe.resolver import BaseResolver, ResolverConfig\n"
+        "from dnsprobe.registry import register\n"
         "\n"
         "@register('my_plugin_for_test')\n"
         "class MyPlugin(BaseResolver):\n"
@@ -97,8 +97,8 @@ def test_discover_plugins_skips_underscore_files(tmp_path, monkeypatch):
     plugin_dir.mkdir()
     (plugin_dir / "_skip_me.py").write_text("# should be ignored")
     (plugin_dir / "real.py").write_text(
-        "from hosts_check.resolver import BaseResolver, ResolverConfig\n"
-        "from hosts_check.registry import register\n"
+        "from dnsprobe.resolver import BaseResolver, ResolverConfig\n"
+        "from dnsprobe.registry import register\n"
         "\n"
         "@register('real_plugin')\n"
         "class RealPlugin(BaseResolver):\n"
@@ -113,7 +113,7 @@ def test_discover_plugins_skips_underscore_files(tmp_path, monkeypatch):
     assert "skip_me" not in _REGISTRY
 
 
-from hosts_check.providers.ip33 import Ip33Resolver
+from dnsprobe.providers.ip33 import Ip33Resolver
 
 
 def test_ip33_resolver_merges_results_from_multiple_upstream(mocker):
@@ -127,7 +127,7 @@ def test_ip33_resolver_merges_results_from_multiple_upstream(mocker):
         mocker.Mock(text='{"record": [{"ip": "9.9.9.9"}, {"ip": "8.8.8.8"}]}'),
         mocker.Mock(text='{"record": [{"ip": "7.7.7.7"}]}'),
     ]
-    mocker.patch("hosts_check.providers.ip33.requests.post", side_effect=fake_responses)
+    mocker.patch("dnsprobe.providers.ip33.requests.post", side_effect=fake_responses)
 
     r = Ip33Resolver(cfg)
     assert r.resolve("example.com", cfg) == ["9.9.9.9", "8.8.8.8", "7.7.7.7"]
@@ -137,7 +137,7 @@ def test_ip33_resolver_raises_resolvererror_on_http_failure(mocker):
     cfg = ResolverConfig(name="ip33", upstream_dns=["1.1.1.1"], extra={})
 
     mocker.patch(
-        "hosts_check.providers.ip33.requests.post",
+        "dnsprobe.providers.ip33.requests.post",
         side_effect=RuntimeError("net down"),
     )
 
@@ -158,7 +158,7 @@ def test_ip33_resolver_continues_when_first_upstream_fails(mocker):
     )
     successful_response = mocker.Mock(text='{"record": [{"ip": "7.7.7.7"}]}')
     mocker.patch(
-        "hosts_check.providers.ip33.requests.post",
+        "dnsprobe.providers.ip33.requests.post",
         side_effect=[RuntimeError("first failed"), successful_response],
     )
 
@@ -175,7 +175,7 @@ def test_ip33_resolver_returns_partial_results(mocker):
         mocker.Mock(text='{"record": [{"ip": "9.9.9.9"}]}'),
         mocker.Mock(text='{"record": [{"ip": "7.7.7.7"}]}'),
     ]
-    mocker.patch("hosts_check.providers.ip33.requests.post", side_effect=responses)
+    mocker.patch("dnsprobe.providers.ip33.requests.post", side_effect=responses)
 
     assert Ip33Resolver(cfg).resolve("example.com", cfg) == ["9.9.9.9", "7.7.7.7"]
 
@@ -187,7 +187,7 @@ def test_ip33_resolver_raises_when_all_upstreams_fail(mocker):
         extra={},
     )
     mocker.patch(
-        "hosts_check.providers.ip33.requests.post",
+        "dnsprobe.providers.ip33.requests.post",
         side_effect=[RuntimeError("first failed"), RuntimeError("second failed")],
     )
 

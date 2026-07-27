@@ -4,13 +4,13 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
-from hosts_check.config import AppConfig
-from hosts_check.reachability import filter_reachable
-from hosts_check.registry import discover_plugins, get
-from hosts_check.resolver import BaseResolver, ResolverConfig, ResolverError
-from hosts_check.writer import write_hosts_file
+from dnsprobe.config import AppConfig
+from dnsprobe.reachability import filter_reachable
+from dnsprobe.registry import discover_plugins, get
+from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
+from dnsprobe.writer import write_hosts_file
 
-import hosts_check.providers  # noqa: F401  # 触发 @register("ip33") 副作用
+import dnsprobe.providers  # noqa: F401  # 触发 @register("ip33") 副作用
 
 
 def _log(msg: str) -> None:

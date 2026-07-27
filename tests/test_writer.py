@@ -3,9 +3,9 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-from hosts_check import writer
-from hosts_check.config import OutputConfig
-from hosts_check.writer import write_hosts_file
+from dnsprobe import writer
+from dnsprobe.config import OutputConfig
+from dnsprobe.writer import write_hosts_file
 
 
 def test_write_hosts_file_basic_format(tmp_path):

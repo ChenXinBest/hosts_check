@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from hosts_check.config import load_config
-from hosts_check.pipeline import run
-from hosts_check.registry import _REGISTRY, discover_plugins
+from dnsprobe.config import load_config
+from dnsprobe.pipeline import run
+from dnsprobe.registry import _REGISTRY, discover_plugins
 
 
 @pytest.fixture(autouse=True)
@@ -30,8 +30,8 @@ def test_full_pipeline_with_third_party_plugin(
     (plugins / "doh_plugin.py").write_text(
         textwrap.dedent(
             """\
-            from hosts_check.registry import register
-            from hosts_check.resolver import BaseResolver, ResolverConfig
+            from dnsprobe.registry import register
+            from dnsprobe.resolver import BaseResolver, ResolverConfig
 
             @register("doh_plugin")
             class DohPlugin(BaseResolver):
@@ -65,7 +65,7 @@ def test_full_pipeline_with_third_party_plugin(
         "domains:\n  - a.example\n  - b.example\n", encoding="utf-8"
     )
 
-    import hosts_check.pipeline as pl
+    import dnsprobe.pipeline as pl
 
     monkeypatch.setattr(pl, "filter_reachable", lambda ips, domain, cfg: ips)
 
@@ -92,8 +92,8 @@ def test_pipeline_dedupes_ips_preserving_order(
     (plugin / "r1.py").write_text(
         textwrap.dedent(
             """\
-            from hosts_check.registry import register
-            from hosts_check.resolver import BaseResolver, ResolverConfig
+            from dnsprobe.registry import register
+            from dnsprobe.resolver import BaseResolver, ResolverConfig
 
             @register("r1")
             class R1(BaseResolver):
@@ -106,8 +106,8 @@ def test_pipeline_dedupes_ips_preserving_order(
     (plugin / "r2.py").write_text(
         textwrap.dedent(
             """\
-            from hosts_check.registry import register
-            from hosts_check.resolver import BaseResolver, ResolverConfig
+            from dnsprobe.registry import register
+            from dnsprobe.resolver import BaseResolver, ResolverConfig
 
             @register("r2")
             class R2(BaseResolver):
@@ -141,7 +141,7 @@ def test_pipeline_dedupes_ips_preserving_order(
         "domains:\n  - x.example\n", encoding="utf-8"
     )
 
-    import hosts_check.pipeline as pl
+    import dnsprobe.pipeline as pl
 
     monkeypatch.setattr(pl, "filter_reachable", lambda ips, domain, cfg: ips)
 

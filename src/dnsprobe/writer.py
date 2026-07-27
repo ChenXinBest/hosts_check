@@ -5,7 +5,7 @@ import datetime
 import os
 from pathlib import Path
 
-from hosts_check.config import OutputConfig
+from dnsprobe.config import OutputConfig
 
 _START = "###start###"
 _END = "###end###"

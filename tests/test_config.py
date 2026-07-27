@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from hosts_check.config import (
+from dnsprobe.config import (
     AppConfig,
     OutputConfig,
     ProviderConfig,

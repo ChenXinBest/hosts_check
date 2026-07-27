@@ -3,13 +3,13 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-from hosts_check.config import (
+from dnsprobe.config import (
     AppConfig,
     OutputConfig,
     ProviderConfig,
     ReachabilityConfig,
 )
-from hosts_check.pipeline import run
+from dnsprobe.pipeline import run
 
 
 def _make_cfg(tmp_path: Path, domains: list[str]) -> AppConfig:
@@ -22,7 +22,7 @@ def _make_cfg(tmp_path: Path, domains: list[str]) -> AppConfig:
 
 
 def test_pipeline_returns_zero_when_at_least_one_domain_works(tmp_path, mocker):
-    from hosts_check import registry
+    from dnsprobe import registry
 
     class FakeResolver:
         name = "fake"
@@ -35,7 +35,7 @@ def test_pipeline_returns_zero_when_at_least_one_domain_works(tmp_path, mocker):
 
     registry._REGISTRY["fake"] = FakeResolver
     mocker.patch(
-        "hosts_check.pipeline.filter_reachable",
+        "dnsprobe.pipeline.filter_reachable",
         return_value=["1.1.1.1"],
     )
 
@@ -49,7 +49,7 @@ def test_pipeline_returns_zero_when_at_least_one_domain_works(tmp_path, mocker):
 
 
 def test_pipeline_returns_one_when_all_domains_fail(tmp_path, mocker):
-    from hosts_check import registry
+    from dnsprobe import registry
 
     class FakeResolver:
         name = "fake"
@@ -61,7 +61,7 @@ def test_pipeline_returns_one_when_all_domains_fail(tmp_path, mocker):
             return []
 
     registry._REGISTRY["fake"] = FakeResolver
-    mocker.patch("hosts_check.pipeline.filter_reachable", return_value=[])
+    mocker.patch("dnsprobe.pipeline.filter_reachable", return_value=[])
 
     cfg = _make_cfg(tmp_path, ["a.example"])
     rc = run(cfg, plugins_dir=None)
@@ -70,7 +70,7 @@ def test_pipeline_returns_one_when_all_domains_fail(tmp_path, mocker):
 
 
 def test_pipeline_skips_disabled_providers(tmp_path, mocker):
-    from hosts_check import registry
+    from dnsprobe import registry
 
     calls = []
 
@@ -86,7 +86,7 @@ def test_pipeline_skips_disabled_providers(tmp_path, mocker):
 
     registry._REGISTRY["fake"] = FakeResolver
     mocker.patch(
-        "hosts_check.pipeline.filter_reachable",
+        "dnsprobe.pipeline.filter_reachable",
         return_value=["1.1.1.1"],
     )
 
@@ -105,8 +105,8 @@ def test_pipeline_skips_disabled_providers(tmp_path, mocker):
 
 
 def test_pipeline_continues_when_one_resolver_raises(tmp_path, mocker):
-    from hosts_check import registry
-    from hosts_check.resolver import ResolverError
+    from dnsprobe import registry
+    from dnsprobe.resolver import ResolverError
 
     class BrokenResolver:
         name = "broken"
@@ -129,7 +129,7 @@ def test_pipeline_continues_when_one_resolver_raises(tmp_path, mocker):
     registry._REGISTRY["broken"] = BrokenResolver
     registry._REGISTRY["good"] = GoodResolver
     mocker.patch(
-        "hosts_check.pipeline.filter_reachable",
+        "dnsprobe.pipeline.filter_reachable",
         return_value=["2.2.2.2"],
     )
 
@@ -153,7 +153,7 @@ def test_pipeline_continues_when_one_resolver_raises(tmp_path, mocker):
 def test_pipeline_skips_provider_when_resolve_raises_unexpected_error(
     tmp_path, mocker
 ):
-    from hosts_check import registry
+    from dnsprobe import registry
 
     class FakeResolver:
         name = "fake-unexpected"
@@ -168,7 +168,7 @@ def test_pipeline_skips_provider_when_resolve_raises_unexpected_error(
 
     registry._REGISTRY["fake-unexpected"] = FakeResolver
     mocker.patch(
-        "hosts_check.pipeline.filter_reachable",
+        "dnsprobe.pipeline.filter_reachable",
         side_effect=lambda ips, domain, config: ips,
     )
     cfg = AppConfig(
@@ -189,7 +189,7 @@ def test_pipeline_skips_provider_when_resolve_raises_unexpected_error(
 
 
 def test_pipeline_handles_plugin_failure_gracefully(tmp_path, mocker):
-    from hosts_check import registry
+    from dnsprobe import registry
 
     class GoodResolver:
         name = "good-after-unavailable"
@@ -202,7 +202,7 @@ def test_pipeline_handles_plugin_failure_gracefully(tmp_path, mocker):
 
     registry._REGISTRY["good-after-unavailable"] = GoodResolver
     mocker.patch(
-        "hosts_check.pipeline.filter_reachable",
+        "dnsprobe.pipeline.filter_reachable",
         return_value=["3.3.3.3"],
     )
     cfg = AppConfig(
