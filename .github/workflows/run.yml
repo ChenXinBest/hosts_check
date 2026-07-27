@@ -22,7 +22,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run daily job
-        run: python -m hosts_check
+        run: python -m dnsprobe
 
       - name: Configure SSH and push
         env:
