@@ -5,7 +5,7 @@
 ## 编写一个 plugin
 
 1. 在本目录下创建 `my_resolver.py`（文件名以下划线开头会被忽略）
-2. 继承 `hosts_check.resolver.BaseResolver`
+2. 继承 `dnsprobe.resolver.BaseResolver`
 3. 用 `@register("name")` 装饰你的类
 4. 实现 `resolve(domain, cfg) -> list[str]`
 5. 在 `config.yml` 的 `providers` 列表中添加这个 name
@@ -13,8 +13,8 @@
 最小模板：
 
 ```python
-from hosts_check.registry import register
-from hosts_check.resolver import BaseResolver, ResolverConfig, ResolverError
+from dnsprobe.registry import register
+from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
 
 
 @register("my_resolver")
@@ -26,4 +26,4 @@ class MyResolver(BaseResolver):
         ...
 ```
 
-启动时 `python -m hosts_check` 会自动扫描本目录下所有 `.py` 文件并 import，触发 `@register` 副作用。
+启动时 `python -m dnsprobe` 会自动扫描本目录下所有 `.py` 文件并 import，触发 `@register` 副作用。
