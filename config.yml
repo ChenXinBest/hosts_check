@@ -1,12 +1,15 @@
 # 启用的 provider 列表（按顺序使用；name 必须是被 @register 注册过的）
 providers:
-  # toolhelper.cn DNSCheck 接口不接 dns 参数；upstream_dns 字段对本 provider 无意义
+  # dnschecked.com query_dns API 不接 dns 参数；upstream_dns 字段对本 provider 无意义
   # （schema 保留以兼容其他可能支持多上游 DNS 的 provider）
-  - name: toolhelper
+  - name: dnschecked
     enabled: true
     upstream_dns: []
     extra:                      # provider 私有参数（透传到 ResolverConfig.extra）
-      timeout: 10
+      # 按大洲/国家批量配置上游 DNS（数据源：dnschecked.com JS 数组）
+      # 默认北美洲（8.8.8.8 / 1.1.1.1 / OpenDNS / Quad9 等）；可加 countries 补充特定国家
+      continents: [north-america]
+      countries: []
 
 # 写入目标
 output:
@@ -17,3 +20,8 @@ output:
 reachability:
   method: http_head             # 现阶段只支持 http_head，留扩展位
   timeout: 5.0
+
+# 并发：外层同时处理 N 个域名（pipeline.run 用 ThreadPoolExecutor）
+# provider 内部仍各自并发查 DNS（dnschecked 是 14 个 DNS 并发）
+# 总并发 ≈ N × 各 provider 的 max_workers
+concurrency: 8

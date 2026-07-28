@@ -6,7 +6,7 @@ import pytest
 import requests
 
 from dnsprobe._bootstrap import register_builtin_providers
-from dnsprobe.providers.toolhelper import ToolhelperResolver
+from dnsprobe.providers.dnschecked import DnscheckedResolver
 from dnsprobe.registry import register, get, discover_plugins, _REGISTRY
 from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
 
@@ -27,8 +27,8 @@ def test_base_resolver_subclass_must_implement_resolve():
 
 
 def test_resolver_config_holds_fields():
-    cfg = ResolverConfig(name="toolhelper", upstream_dns=["1.1.1.1"], extra={"k": "v"})
-    assert cfg.name == "toolhelper"
+    cfg = ResolverConfig(name="dnschecked", upstream_dns=["1.1.1.1"], extra={"k": "v"})
+    assert cfg.name == "dnschecked"
     assert cfg.upstream_dns == ["1.1.1.1"]
     assert cfg.extra == {"k": "v"}
 
@@ -49,18 +49,18 @@ def test_resolver_error_is_exception():
 
 @pytest.fixture(autouse=True)
 def _clean_registry():
-    """每个测试前清空注册表与 toolhelper 模块缓存，避免污染。"""
+    """每个测试前清空注册表与 dnschecked 模块缓存，避免污染。"""
     _REGISTRY.clear()
-    sys.modules.pop("dnsprobe.providers.toolhelper", None)
+    sys.modules.pop("dnsprobe.providers.dnschecked", None)
     providers_pkg = sys.modules.get("dnsprobe.providers")
     if providers_pkg is not None:
-        providers_pkg.__dict__.pop("toolhelper", None)
+        providers_pkg.__dict__.pop("dnschecked", None)
     yield
     _REGISTRY.clear()
-    sys.modules.pop("dnsprobe.providers.toolhelper", None)
+    sys.modules.pop("dnsprobe.providers.dnschecked", None)
     providers_pkg = sys.modules.get("dnsprobe.providers")
     if providers_pkg is not None:
-        providers_pkg.__dict__.pop("toolhelper", None)
+        providers_pkg.__dict__.pop("dnschecked", None)
 
 
 def test_register_decorator_registers_class():
@@ -125,121 +125,98 @@ def test_discover_plugins_skips_underscore_files(tmp_path, monkeypatch):
     assert "skip_me" not in _REGISTRY
 
 
-def test_toolhelper_resolver_returns_ips_on_success(mocker):
-    """Tag=1 响应应返回 Data.A 中 <br> 分隔的 IP 列表（去空）。"""
-    cfg = ResolverConfig(name="toolhelper", upstream_dns=[], extra={})
+def test_dnschecked_resolver_returns_ips_on_success(mocker):
+    """单个 DNS 200 + results 非空 → 返回 IP 列表。"""
+    cfg = ResolverConfig(name="dnschecked", upstream_dns=[], extra={"continents": ["asia"]})
     mocker.patch(
-        "dnsprobe.providers.toolhelper.requests.post",
+        "dnsprobe.providers.dnschecked.requests.post",
         return_value=mocker.Mock(
             status_code=200,
-            json=lambda: {
-                "Total": 0,
-                "Data": {
-                    "A": "1.1.1.1<br>2.2.2.2<br>3.3.3.3",
-                    "AAAA": "",
-                    "NS": "",
-                    "MX": "",
-                    "TXT": "",
-                    "SOA": "",
-                },
-                "Tag": 1,
-                "Message": None,
-                "Description": None,
-            },
-            raise_for_status=lambda: None,
+            json=lambda: {"status_code": 200, "domain": "github.com", "record_type": "A",
+                          "dns_server": "223.5.5.5", "results": ["140.82.116.4"]},
         ),
     )
-    r = ToolhelperResolver(cfg)
-    assert r.resolve("github.com", cfg) == ["1.1.1.1", "2.2.2.2", "3.3.3.3"]
+    r = DnscheckedResolver(cfg)
+    assert r.resolve("github.com", cfg) == ["140.82.116.4"]
 
 
-def test_toolhelper_resolver_posts_host_param_and_headers(mocker):
-    """POST data={host: domain} + headers 含 Origin/Referer/X-Requested-With + URL 含 query。"""
-    cfg = ResolverConfig(name="toolhelper", upstream_dns=[], extra={})
+def test_dnschecked_resolver_posts_json_body_and_headers(mocker):
+    """POST json={"domain", "record_type": "A", "dns_server"} + headers 含 Origin/Referer。"""
+    cfg = ResolverConfig(name="dnschecked", upstream_dns=[], extra={"continents": ["asia"]})
     mock_post = mocker.patch(
-        "dnsprobe.providers.toolhelper.requests.post",
-        return_value=mocker.Mock(
-            status_code=200,
-            json=lambda: {"Total": 0, "Data": {"A": "1.1.1.1"}, "Tag": 1, "Message": None, "Description": None},
-            raise_for_status=lambda: None,
-        ),
+        "dnsprobe.providers.dnschecked.requests.post",
+        return_value=mocker.Mock(status_code=200, json=lambda: {"status_code": 200, "results": []}),
     )
-    r = ToolhelperResolver(cfg)
-    r.resolve("avatars.githubusercontent.com", cfg)
+    r = DnscheckedResolver(cfg)
+    # 全部 DNS 都返回空，会抛 ResolverError——但调用已经发完，可以检查 call_args_list
+    with pytest.raises(ResolverError):
+        r.resolve("avatars.githubusercontent.com", cfg)
 
-    call = mock_post.call_args
-    # data 是 form-encoded body
-    assert call.kwargs["data"] == {"host": "avatars.githubusercontent.com"}
-    # URL 走 keyword args，应是空字符串（参数走 data）
-    assert "url" not in call.kwargs or call.kwargs.get("url") is None
-    # headers 验证
+    # 取任意一个 call 验证 body 结构 + headers
+    assert len(mock_post.call_args_list) > 0
+    call = mock_post.call_args_list[0]
+    body = call.kwargs["json"]
+    assert body["domain"] == "avatars.githubusercontent.com"
+    assert body["record_type"] == "A"
+    assert body["dns_server"] in {"223.5.5.5", "202.46.34.75", "115.178.96.2"}  # asia 大洲里的某个 DNS
     headers = call.kwargs["headers"]
-    assert headers["Origin"] == "https://www.toolhelper.cn"
-    assert headers["Referer"] == "https://www.toolhelper.cn/Http/DNSCheck"
-    assert headers["X-Requested-With"] == "XMLHttpRequest"
-    # URL query string 验证：call.args[0] 是 URL
-    url = call.args[0]
-    assert url.startswith("https://www.toolhelper.cn/Http/DNSCheck?")
-    assert "gts=" in url
-    assert "gv=334" in url
-    assert "r_=" in url
+    assert headers["Origin"] == "https://dnschecked.com"
+    assert headers["Referer"] == "https://dnschecked.com/"
 
 
-def test_toolhelper_resolver_raises_on_tag_0_no_records(mocker):
-    """Tag=0 响应（无 DNS 记录）应抛 ResolverError。"""
-    cfg = ResolverConfig(name="toolhelper", upstream_dns=[], extra={})
-    mocker.patch(
-        "dnsprobe.providers.toolhelper.requests.post",
-        return_value=mocker.Mock(
-            status_code=200,
-            json=lambda: {"Total": 0, "Data": None, "Tag": 0, "Message": "未发现对应的 DNS 记录", "Description": None},
-            raise_for_status=lambda: None,
-        ),
+def test_dnschecked_resolver_unions_results_from_multiple_dns(mocker):
+    """多个 DNS 都 200 → 返回所有 results 并集（保序去重）。"""
+    cfg = ResolverConfig(
+        name="dnschecked", upstream_dns=[],
+        extra={"continents": [], "countries": ["cn", "us"]},
     )
-    r = ToolhelperResolver(cfg)
-    with pytest.raises(ResolverError):
-        r.resolve("nonexistent.example.invalid", cfg)
+    # 第一次调用（cn）返回 1 个 IP，第二次（us）返回 1 个不同 IP
+    responses = [
+        mocker.Mock(status_code=200, json=lambda: {"status_code": 200, "results": ["1.1.1.1"]}),
+        mocker.Mock(status_code=200, json=lambda: {"status_code": 200, "results": ["2.2.2.2"]}),
+    ]
+    mocker.patch("dnsprobe.providers.dnschecked.requests.post", side_effect=responses)
+    r = DnscheckedResolver(cfg)
+    # 并行无序，所以检查集合（不去重后用 == 比较）
+    result = r.resolve("github.com", cfg)
+    assert sorted(result) == ["1.1.1.1", "2.2.2.2"]
 
 
-def test_toolhelper_resolver_raises_on_tag_minus_one_invalid_request(mocker):
-    """Tag=-1 响应（非法访问）应抛 ResolverError。"""
-    cfg = ResolverConfig(name="toolhelper", upstream_dns=[], extra={})
+def test_dnschecked_resolver_skips_failed_dns(mocker):
+    """单个 DNS 4xx 失败，其他 DNS 成功 → 只返回成功的结果。"""
+    cfg = ResolverConfig(name="dnschecked", upstream_dns=[], extra={"countries": ["cn", "us"]})
+    responses = [
+        mocker.Mock(status_code=404, json=lambda: {"detail": "The DNS query name does not exist"}),
+        mocker.Mock(status_code=200, json=lambda: {"status_code": 200, "results": ["8.8.8.8"]}),
+    ]
+    mocker.patch("dnsprobe.providers.dnschecked.requests.post", side_effect=responses)
+    r = DnscheckedResolver(cfg)
+    assert r.resolve("github.com", cfg) == ["8.8.8.8"]
+
+
+def test_dnschecked_resolver_raises_when_all_dns_fail(mocker):
+    """所有 DNS 都失败（异常 + 4xx）→ 抛 ResolverError。"""
+    cfg = ResolverConfig(name="dnschecked", upstream_dns=[], extra={"countries": ["cn", "us"]})
     mocker.patch(
-        "dnsprobe.providers.toolhelper.requests.post",
-        return_value=mocker.Mock(
-            status_code=200,
-            json=lambda: {"Total": 0, "Data": None, "Tag": -1, "Message": "非法访问", "Description": None},
-            raise_for_status=lambda: None,
-        ),
-    )
-    r = ToolhelperResolver(cfg)
-    with pytest.raises(ResolverError):
-        r.resolve("example.com", cfg)
-
-
-def test_toolhelper_resolver_raises_on_http_failure(mocker):
-    """HTTP 请求异常应抛 ResolverError。"""
-    cfg = ResolverConfig(name="toolhelper", upstream_dns=[], extra={})
-    mocker.patch(
-        "dnsprobe.providers.toolhelper.requests.post",
+        "dnsprobe.providers.dnschecked.requests.post",
         side_effect=requests.exceptions.ConnectionError(),
     )
-    r = ToolhelperResolver(cfg)
+    r = DnscheckedResolver(cfg)
     with pytest.raises(ResolverError):
-        r.resolve("example.com", cfg)
+        r.resolve("github.com", cfg)
 
 
-def test_toolhelper_resolver_is_registered():
-    from dnsprobe.providers.toolhelper import ToolhelperResolver  # fixture pop sys.modules 后本地重绑，保证 is 同一对象
-    assert get("toolhelper") is ToolhelperResolver
+def test_dnschecked_resolver_is_registered():
+    from dnsprobe.providers.dnschecked import DnscheckedResolver  # fixture pop sys.modules 后本地重绑，保证 is 同一对象
+    assert get("dnschecked") is DnscheckedResolver
 
 
-def test_register_builtin_providers_adds_toolhelper_to_registry():
-    """显式调用 register_builtin_providers() 后 _REGISTRY 含 toolhelper。"""
-    _REGISTRY.pop("toolhelper", None)  # 先清理（防 fixture 残留）
+def test_register_builtin_providers_adds_dnschecked_to_registry():
+    """显式调用 register_builtin_providers() 后 _REGISTRY 含 dnschecked。"""
+    _REGISTRY.pop("dnschecked", None)  # 先清理（防 fixture 残留）
     register_builtin_providers()
-    assert "toolhelper" in _REGISTRY
-    assert _REGISTRY["toolhelper"].__name__ == "ToolhelperResolver"
+    assert "dnschecked" in _REGISTRY
+    assert _REGISTRY["dnschecked"].__name__ == "DnscheckedResolver"
 
 
 def test_register_builtin_providers_is_idempotent():
@@ -247,4 +224,4 @@ def test_register_builtin_providers_is_idempotent():
     register_builtin_providers()
     register_builtin_providers()
     # 同一 class object 仍在 _REGISTRY
-    assert _REGISTRY["toolhelper"].__name__ == "ToolhelperResolver"
+    assert _REGISTRY["dnschecked"].__name__ == "DnscheckedResolver"
