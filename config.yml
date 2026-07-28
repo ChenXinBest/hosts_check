@@ -1,8 +1,8 @@
 # 启用的 provider 列表（按顺序使用；name 必须是被 @register 注册过的）
 providers:
-  # 注：ip33 新 API 不再接受 dns 参数；upstream_dns 字段对本 provider 无意义
+  # toolhelper.cn DNSCheck 接口不接 dns 参数；upstream_dns 字段对本 provider 无意义
   # （schema 保留以兼容其他可能支持多上游 DNS 的 provider）
-  - name: ip33
+  - name: toolhelper
     enabled: true
     upstream_dns: []
     extra:                      # provider 私有参数（透传到 ResolverConfig.extra）
