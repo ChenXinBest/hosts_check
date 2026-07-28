@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from dnsprobe._bootstrap import register_builtin_providers
@@ -41,22 +42,41 @@ def _build_resolver_instances(
     return out
 
 
+def _resolve_domain(
+    domain: str,
+    resolvers: list[tuple[BaseResolver, ResolverConfig]],
+) -> list[str]:
+    """解析单个域名（多 resolver 串行），返回所有 IP。异常吞掉。"""
+    out: list[str] = []
+    for resolver, rcfg in resolvers:
+        try:
+            ips = resolver.resolve(domain, rcfg)
+        except ResolverError as e:
+            _log(f"[!] {resolver.name} on {domain}: {e}")
+            continue
+        except Exception as e:
+            _log(f"[!] {resolver.name} on {domain}: unexpected error: {e}")
+            continue
+        out.extend(ips)
+    return out
+
+
 def run(config: AppConfig, plugins_dir: Path | None = None) -> int:
-    """执行完整流程，返回退出码（0=至少一有结果，1=全部失败）。"""
+    """执行完整流程，返回退出码（0=至少一有结果，1=全部失败）。
+
+    外层用 ThreadPoolExecutor 并发处理 N 个域名（`config.concurrency`）。
+    provider 内部仍各自并发查 DNS（两层并发，总并发数 ≈ N × 各 provider 的 max_workers）。
+    """
     resolvers = _build_resolver_instances(config.providers, plugins_dir)
 
     raw: dict[str, list[str]] = defaultdict(list)
-    for domain in config.domains:
-        for resolver, rcfg in resolvers:
-            try:
-                ips = resolver.resolve(domain, rcfg)
-            except ResolverError as e:
-                _log(f"[!] {resolver.name} on {domain}: {e}")
-                continue
-            except Exception as e:
-                _log(f"[!] {resolver.name} on {domain}: unexpected error: {e}")
-                continue
-            raw[domain].extend(ips)
+    if config.domains:
+        with ThreadPoolExecutor(max_workers=max(1, config.concurrency)) as pool:
+            futures = {pool.submit(_resolve_domain, d, resolvers): d for d in config.domains}
+            for fut, domain in futures.items():
+                ips = fut.result()
+                if ips:
+                    raw[domain].extend(ips)
 
     filtered: dict[str, list[str]] = {}
     for domain, ips in raw.items():

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime
+import threading
+import time
 from pathlib import Path
 
 from dnsprobe.config import (
@@ -220,3 +222,96 @@ def test_pipeline_handles_plugin_failure_gracefully(tmp_path, mocker):
     assert rc == 0
     content = (tmp_path / "hosts.txt").read_text(encoding="utf-8")
     assert "3.3.3.3\ta.example" in content
+
+
+def test_pipeline_processes_domains_concurrently_with_configured_concurrency(tmp_path, mocker):
+    """验证 pipeline.run() 用 ThreadPoolExecutor 跑 N 个域名（concurrency=8）。"""
+    from dnsprobe import registry
+
+    in_flight = 0
+    peak_in_flight = 0
+    lock = threading.Lock()
+
+    class SlowResolver:
+        name = "slow"
+
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+        def resolve(self, domain, cfg):
+            nonlocal in_flight, peak_in_flight
+            with lock:
+                in_flight += 1
+                if in_flight > peak_in_flight:
+                    peak_in_flight = in_flight
+            try:
+                time.sleep(0.1)  # 让并发在窗口内积累
+                return ["1.1.1.1"]
+            finally:
+                with lock:
+                    in_flight -= 1
+
+    registry._REGISTRY["slow"] = SlowResolver
+    mocker.patch(
+        "dnsprobe.pipeline.filter_reachable",
+        return_value=["1.1.1.1"],
+    )
+
+    cfg = AppConfig(
+        providers=[ProviderConfig(name="slow")],
+        output=OutputConfig(path=str(tmp_path / "hosts.txt"), keep_old_section=False),
+        reachability=ReachabilityConfig(),
+        domains=[f"d{i}.example" for i in range(20)],  # 20 个域名
+        concurrency=8,
+    )
+    rc = run(cfg, plugins_dir=None)
+
+    assert rc == 0
+    # 期望并发峰值接近 concurrency=8（不是 1）
+    assert peak_in_flight >= 4, f"expected concurrent execution, but peak_in_flight={peak_in_flight}"
+
+
+def test_pipeline_concurrency_one_processes_serially(tmp_path, mocker):
+    """concurrency=1 时串行处理（peak_in_flight=1）。"""
+    from dnsprobe import registry
+
+    in_flight = 0
+    peak_in_flight = 0
+    lock = threading.Lock()
+
+    class TrackingResolver:
+        name = "track"
+
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+        def resolve(self, domain, cfg):
+            nonlocal in_flight, peak_in_flight
+            with lock:
+                in_flight += 1
+                if in_flight > peak_in_flight:
+                    peak_in_flight = in_flight
+            try:
+                time.sleep(0.05)
+                return ["2.2.2.2"]
+            finally:
+                with lock:
+                    in_flight -= 1
+
+    registry._REGISTRY["track"] = TrackingResolver
+    mocker.patch(
+        "dnsprobe.pipeline.filter_reachable",
+        return_value=["2.2.2.2"],
+    )
+
+    cfg = AppConfig(
+        providers=[ProviderConfig(name="track")],
+        output=OutputConfig(path=str(tmp_path / "hosts.txt"), keep_old_section=False),
+        reachability=ReachabilityConfig(),
+        domains=[f"d{i}.example" for i in range(5)],
+        concurrency=1,
+    )
+    rc = run(cfg, plugins_dir=None)
+
+    assert rc == 0
+    assert peak_in_flight == 1
