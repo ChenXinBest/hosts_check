@@ -5,9 +5,10 @@ import sys
 import pytest
 import requests
 
+from dnsprobe._bootstrap import register_builtin_providers
+from dnsprobe.providers.ip33 import Ip33Resolver
 from dnsprobe.registry import register, get, discover_plugins, _REGISTRY
 from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
-from dnsprobe.providers.ip33 import Ip33Resolver
 
 
 def test_base_resolver_cannot_be_instantiated_directly():
@@ -124,9 +125,6 @@ def test_discover_plugins_skips_underscore_files(tmp_path, monkeypatch):
     assert "skip_me" not in _REGISTRY
 
 
-from dnsprobe.providers.ip33 import Ip33Resolver
-
-
 def test_ip33_resolver_returns_ips_on_success(mocker):
     """type=3 响应应返回 ips[*].ip 列表。"""
     cfg = ResolverConfig(name="ip33", upstream_dns=[], extra={})
@@ -195,9 +193,6 @@ def test_ip33_resolver_raises_on_http_failure(mocker):
 def test_ip33_resolver_is_registered():
     from dnsprobe.providers.ip33 import Ip33Resolver  # fixture pop sys.modules 后本地重绑，保证 is 同一对象
     assert get("ip33") is Ip33Resolver
-
-
-from dnsprobe._bootstrap import register_builtin_providers
 
 
 def test_register_builtin_providers_adds_ip33_to_registry():

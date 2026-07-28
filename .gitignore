@@ -38,5 +38,7 @@ env/
 Thumbs.db
 
 # Local files
+# hosts.txt: 本地构建产物默认忽略，但 GitHub Action 每日生成后会用 `git add -f` 强推回 master
+# （外部用户通过 raw URL 直接消费这个文件，所以保留 tracked）
 hosts.txt
 .superpowers/

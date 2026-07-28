@@ -60,11 +60,5 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
-def _registered_names() -> list[str]:
-    from dnsprobe.registry import _REGISTRY
-
-    return list(_REGISTRY.keys())
-
-
 if __name__ == "__main__":
     sys.exit(main())
