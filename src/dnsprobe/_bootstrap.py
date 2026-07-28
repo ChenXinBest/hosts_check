@@ -8,4 +8,4 @@ from __future__ import annotations
 
 def register_builtin_providers() -> None:
     """触发内置 provider 的 @register 副作用。幂等。"""
-    from dnsprobe.providers import dnschecked  # noqa: F401  # 触发 @register("dnschecked")
+    from dnsprobe.providers import doh  # noqa: F401  # 触发 @register("doh")

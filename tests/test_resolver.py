@@ -4,9 +4,12 @@ import sys
 
 import pytest
 import requests
+import dns.message
+import dns.rdatatype
+import dns.rrset
 
 from dnsprobe._bootstrap import register_builtin_providers
-from dnsprobe.providers.dnschecked import DnscheckedResolver
+from dnsprobe.providers.doh import DoHResolver, _build_query, _parse_response
 from dnsprobe.registry import register, get, discover_plugins, _REGISTRY
 from dnsprobe.resolver import BaseResolver, ResolverConfig, ResolverError
 
@@ -27,8 +30,8 @@ def test_base_resolver_subclass_must_implement_resolve():
 
 
 def test_resolver_config_holds_fields():
-    cfg = ResolverConfig(name="dnschecked", upstream_dns=["1.1.1.1"], extra={"k": "v"})
-    assert cfg.name == "dnschecked"
+    cfg = ResolverConfig(name="doh", upstream_dns=["1.1.1.1"], extra={"k": "v"})
+    assert cfg.name == "doh"
     assert cfg.upstream_dns == ["1.1.1.1"]
     assert cfg.extra == {"k": "v"}
 
@@ -49,18 +52,18 @@ def test_resolver_error_is_exception():
 
 @pytest.fixture(autouse=True)
 def _clean_registry():
-    """每个测试前清空注册表与 dnschecked 模块缓存，避免污染。"""
+    """每个测试前清空注册表与 doh 模块缓存，避免污染。"""
     _REGISTRY.clear()
-    sys.modules.pop("dnsprobe.providers.dnschecked", None)
+    sys.modules.pop("dnsprobe.providers.doh", None)
     providers_pkg = sys.modules.get("dnsprobe.providers")
     if providers_pkg is not None:
-        providers_pkg.__dict__.pop("dnschecked", None)
+        providers_pkg.__dict__.pop("doh", None)
     yield
     _REGISTRY.clear()
-    sys.modules.pop("dnsprobe.providers.dnschecked", None)
+    sys.modules.pop("dnsprobe.providers.doh", None)
     providers_pkg = sys.modules.get("dnsprobe.providers")
     if providers_pkg is not None:
-        providers_pkg.__dict__.pop("dnschecked", None)
+        providers_pkg.__dict__.pop("doh", None)
 
 
 def test_register_decorator_registers_class():
@@ -79,7 +82,6 @@ def test_get_unknown_name_raises():
 
 
 def test_discover_plugins_imports_module_and_triggers_register(tmp_path, monkeypatch):
-    # 写一个临时 plugin 文件
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
     plugin_file = plugin_dir / "my_plugin.py"
@@ -92,8 +94,6 @@ def test_discover_plugins_imports_module_and_triggers_register(tmp_path, monkeyp
         "    def resolve(self, domain, cfg):\n"
         "        return ['1.2.3.4']\n"
     )
-
-    # 让 plugins.<stem> 这种 import 能 work：把 tmp_path 加到 sys.path
     monkeypatch.syspath_prepend(str(tmp_path))
 
     discover_plugins(plugin_dir)
@@ -125,146 +125,207 @@ def test_discover_plugins_skips_underscore_files(tmp_path, monkeypatch):
     assert "skip_me" not in _REGISTRY
 
 
-def test_dnschecked_resolver_returns_ips_on_success(mocker):
-    """单个 DNS 200 + results 非空 → 返回 IP 列表。"""
-    cfg = ResolverConfig(name="dnschecked", upstream_dns=[], extra={"continents": ["asia"]})
-    mocker.patch(
-        "dnsprobe.providers.dnschecked.requests.post",
-        return_value=mocker.Mock(
-            status_code=200,
-            json=lambda: {"status_code": 200, "domain": "github.com", "record_type": "A",
-                          "dns_server": "223.5.5.5", "results": ["140.82.116.4"]},
-        ),
-    )
-    r = DnscheckedResolver(cfg)
-    assert r.resolve("github.com", cfg) == ["140.82.116.4"]
+# ── helper: 构造一个 DoH 响应 wire bytes ──────────────────────────
+def _build_doh_response(domain: str, ips: list[str], rcode=0) -> bytes:
+    # 用绝对名（带 trailing dot）确保 wire 转换能成功
+    fqdn = domain if domain.endswith(".") else domain + "."
+    q = dns.message.make_query(fqdn, dns.rdatatype.A)
+    msg = dns.message.make_response(q)
+    msg.rcode = rcode
+    for ip in ips:
+        rrset = dns.rrset.from_text(fqdn, 300, dns.rdataclass.IN, dns.rdatatype.A, ip)
+        msg.answer.append(rrset)
+    return msg.to_wire()
 
 
-def test_dnschecked_resolver_posts_json_body_and_headers(mocker):
-    """POST json={"domain", "record_type": "A", "dns_server"} + headers 含 Origin/Referer。"""
-    cfg = ResolverConfig(name="dnschecked", upstream_dns=[], extra={"continents": ["asia"]})
-    mock_post = mocker.patch(
-        "dnsprobe.providers.dnschecked.requests.post",
-        return_value=mocker.Mock(status_code=200, json=lambda: {"status_code": 200, "results": []}),
-    )
-    r = DnscheckedResolver(cfg)
-    # 全部 DNS 都返回空，会抛 ResolverError——但调用已经发完，可以检查 call_args_list
-    with pytest.raises(ResolverError):
-        r.resolve("avatars.githubusercontent.com", cfg)
-
-    # 取任意一个 call 验证 body 结构 + headers
-    assert len(mock_post.call_args_list) > 0
-    call = mock_post.call_args_list[0]
-    body = call.kwargs["json"]
-    assert body["domain"] == "avatars.githubusercontent.com"
-    assert body["record_type"] == "A"
-    assert body["dns_server"] in {"223.5.5.5", "202.46.34.75", "115.178.96.2"}  # asia 大洲里的某个 DNS
-    headers = call.kwargs["headers"]
-    assert headers["Origin"] == "https://dnschecked.com"
-    assert headers["Referer"] == "https://dnschecked.com/"
-
-
-def test_dnschecked_resolver_unions_results_from_multiple_dns(mocker):
-    """多个 DNS 都 200 → 返回所有 results 并集（保序去重）。"""
+def test_doh_resolver_returns_ips_on_success(mocker):
+    """单个 DoH 端点返回 A 记录 → 解析 IP 列表。"""
     cfg = ResolverConfig(
-        name="dnschecked", upstream_dns=[],
-        extra={"continents": [], "countries": ["cn", "us"]},
+        name="doh", upstream_dns=[],
+        extra={"dns_servers": [
+            {"name": "mock", "url": "https://mock.dns/dns-query", "country": "us", "weight": 1.0, "proxy": False},
+        ]},
     )
-    # 第一次调用（cn）返回 1 个 IP，第二次（us）返回 1 个不同 IP
-    responses = [
-        mocker.Mock(status_code=200, json=lambda: {"status_code": 200, "results": ["1.1.1.1"]}),
-        mocker.Mock(status_code=200, json=lambda: {"status_code": 200, "results": ["2.2.2.2"]}),
-    ]
-    mocker.patch("dnsprobe.providers.dnschecked.requests.post", side_effect=responses)
-    r = DnscheckedResolver(cfg)
-    # 并行无序，所以检查集合（不去重后用 == 比较）
-    result = r.resolve("github.com", cfg)
-    assert sorted(result) == ["1.1.1.1", "2.2.2.2"]
-
-
-def test_dnschecked_resolver_skips_failed_dns(mocker):
-    """单个 DNS 4xx 失败，其他 DNS 成功 → 只返回成功的结果。"""
-    cfg = ResolverConfig(name="dnschecked", upstream_dns=[], extra={"countries": ["cn", "us"]})
-    responses = [
-        mocker.Mock(status_code=404, json=lambda: {"detail": "The DNS query name does not exist"}),
-        mocker.Mock(status_code=200, json=lambda: {"status_code": 200, "results": ["8.8.8.8"]}),
-    ]
-    mocker.patch("dnsprobe.providers.dnschecked.requests.post", side_effect=responses)
-    r = DnscheckedResolver(cfg)
-    assert r.resolve("github.com", cfg) == ["8.8.8.8"]
-
-
-def test_dnschecked_resolver_raises_when_all_dns_fail(mocker):
-    """所有 DNS 都失败（异常 + 4xx）→ 抛 ResolverError。"""
-    cfg = ResolverConfig(name="dnschecked", upstream_dns=[], extra={"countries": ["cn", "us"]})
+    response_wire = _build_doh_response("github.com", ["1.1.1.1", "2.2.2.2"])
     mocker.patch(
-        "dnsprobe.providers.dnschecked.requests.post",
-        side_effect=requests.exceptions.ConnectionError(),
+        "dnsprobe.providers.doh.requests.get",
+        return_value=mocker.Mock(status_code=200, content=response_wire),
     )
-    r = DnscheckedResolver(cfg)
-    with pytest.raises(ResolverError):
-        r.resolve("github.com", cfg)
+
+    r = DoHResolver(cfg)
+    assert r.resolve("github.com", cfg) == ["1.1.1.1", "2.2.2.2"]
 
 
-def test_dnschecked_resolver_is_registered():
-    from dnsprobe.providers.dnschecked import DnscheckedResolver  # fixture pop sys.modules 后本地重绑，保证 is 同一对象
-    assert get("dnschecked") is DnscheckedResolver
-
-
-def test_dnschecked_resolver_uses_http_proxy_when_configured(mocker):
-    """cfg.extra.http_proxy 设置时，requests.post 应带 proxies 参数。"""
+def test_doh_resolver_posts_dns_param_and_headers(mocker):
+    """DoH GET: URL 包含 ?dns=<base64url>，header Accept: application/dns-message。"""
     cfg = ResolverConfig(
-        name="dnschecked", upstream_dns=[],
-        extra={"continents": ["asia"], "http_proxy": "http://proxy.example.com:8080"},
+        name="doh", upstream_dns=[],
+        extra={"dns_servers": [
+            {"name": "mock", "url": "https://mock.dns/dns-query", "country": "us", "weight": 1.0, "proxy": False},
+        ]},
     )
-    mock_post = mocker.patch(
-        "dnsprobe.providers.dnschecked.requests.post",
-        return_value=mocker.Mock(
-            status_code=200,
-            json=lambda: {"status_code": 200, "results": ["1.1.1.1"]},
-        ),
+    response_wire = _build_doh_response("github.com", ["1.1.1.1"])
+    mock_get = mocker.patch(
+        "dnsprobe.providers.doh.requests.get",
+        return_value=mocker.Mock(status_code=200, content=response_wire),
     )
-    r = DnscheckedResolver(cfg)
+
+    r = DoHResolver(cfg)
+    r.resolve("avatars.githubusercontent.com", cfg)
+
+    call = mock_get.call_args
+    assert call.args[0].startswith("https://mock.dns/dns-query?dns=")
+    assert "dns=" in call.args[0]
+    assert call.kwargs["headers"]["Accept"] == "application/dns-message"
+    assert call.kwargs["timeout"] == 10
+
+
+def test_doh_resolver_uses_proxy_when_server_marks_proxy_true(mocker):
+    """server.proxy=true 时，requests.get 应带 proxies 参数。"""
+    cfg = ResolverConfig(
+        name="doh", upstream_dns=[],
+        extra={
+            "dns_servers": [
+                {"name": "google", "url": "https://dns.google/dns-query", "country": "us", "weight": 2.0, "proxy": True},
+            ],
+            "http_proxy": "http://proxy.example.com:8080",
+        },
+    )
+    response_wire = _build_doh_response("github.com", ["8.8.8.8"])
+    mock_get = mocker.patch(
+        "dnsprobe.providers.doh.requests.get",
+        return_value=mocker.Mock(status_code=200, content=response_wire),
+    )
+
+    r = DoHResolver(cfg)
     r.resolve("github.com", cfg)
 
-    call = mock_post.call_args
+    call = mock_get.call_args
     assert call.kwargs["proxies"] == {
         "http": "http://proxy.example.com:8080",
         "https": "http://proxy.example.com:8080",
     }
 
 
-def test_dnschecked_resolver_no_proxy_when_not_configured(mocker):
-    """cfg.extra.http_proxy 不设置时，proxies 应为 None（直连）。"""
+def test_doh_resolver_no_proxy_when_server_marks_proxy_false(mocker):
+    """server.proxy=false 时（即使顶层有 http_proxy），proxies=None。"""
     cfg = ResolverConfig(
-        name="dnschecked", upstream_dns=[],
-        extra={"continents": ["asia"]},  # 不设 http_proxy
+        name="doh", upstream_dns=[],
+        extra={
+            "dns_servers": [
+                {"name": "aliyun", "url": "https://dns.alidns.com/dns-query", "country": "cn", "weight": 1.0, "proxy": False},
+            ],
+            "http_proxy": "http://proxy.example.com:8080",
+        },
     )
-    mock_post = mocker.patch(
-        "dnsprobe.providers.dnschecked.requests.post",
-        return_value=mocker.Mock(
-            status_code=200,
-            json=lambda: {"status_code": 200, "results": ["1.1.1.1"]},
-        ),
+    response_wire = _build_doh_response("github.com", ["223.5.5.5"])
+    mock_get = mocker.patch(
+        "dnsprobe.providers.doh.requests.get",
+        return_value=mocker.Mock(status_code=200, content=response_wire),
     )
-    r = DnscheckedResolver(cfg)
+
+    r = DoHResolver(cfg)
     r.resolve("github.com", cfg)
 
-    call = mock_post.call_args
+    call = mock_get.call_args
     assert call.kwargs["proxies"] is None
 
 
-def test_register_builtin_providers_adds_dnschecked_to_registry():
-    """显式调用 register_builtin_providers() 后 _REGISTRY 含 dnschecked。"""
-    _REGISTRY.pop("dnschecked", None)  # 先清理（防 fixture 残留）
+def test_doh_resolver_unions_results_from_multiple_servers(mocker):
+    """多个 DoH 端点都返回 → 取并集（按 weight 顺序）。"""
+    cfg = ResolverConfig(
+        name="doh", upstream_dns=[],
+        extra={"dns_servers": [
+            {"name": "low",  "url": "https://low.dns/q",  "country": "cn", "weight": 1.0, "proxy": False},
+            {"name": "high", "url": "https://high.dns/q", "country": "us", "weight": 3.0, "proxy": True},
+        ]},
+    )
+    # 用 URL 区分响应：low 端点返回 1.1.1.1，high 端点返回 2.2.2.2
+    url_to_ip = {
+        "low.dns": "1.1.1.1",
+        "high.dns": "2.2.2.2",
+    }
+
+    def dispatch(url, *a, **kw):
+        # 从 url 提取 host
+        host = url.split("/")[2]
+        ip = url_to_ip[host]
+        return mocker.Mock(status_code=200, content=_build_doh_response("github.com", [ip]))
+
+    mocker.patch("dnsprobe.providers.doh.requests.get", side_effect=dispatch)
+
+    r = DoHResolver(cfg)
+    result = r.resolve("github.com", cfg)
+
+    # 高权重 (high) 的 2.2.2.2 应该在前面
+    assert result == ["2.2.2.2", "1.1.1.1"]
+
+
+def test_doh_resolver_skips_failed_servers(mocker):
+    """一个端点失败（status != 200）→ 用其他端点的结果。"""
+    cfg = ResolverConfig(
+        name="doh", upstream_dns=[],
+        extra={"dns_servers": [
+            {"name": "a", "url": "https://a.dns/q", "country": "cn", "weight": 1.0, "proxy": False},
+            {"name": "b", "url": "https://b.dns/q", "country": "us", "weight": 2.0, "proxy": True},
+        ]},
+    )
+    def dispatch(url, *a, **kw):
+        if "a.dns" in url:
+            return mocker.Mock(status_code=500, content=b"")
+        return mocker.Mock(status_code=200, content=_build_doh_response("github.com", ["1.1.1.1"]))
+
+    mocker.patch("dnsprobe.providers.doh.requests.get", side_effect=dispatch)
+
+    r = DoHResolver(cfg)
+    assert r.resolve("github.com", cfg) == ["1.1.1.1"]
+
+
+def test_doh_resolver_raises_when_all_servers_fail(mocker):
+    """所有端点都失败 → 抛 ResolverError。"""
+    cfg = ResolverConfig(
+        name="doh", upstream_dns=[],
+        extra={"dns_servers": [
+            {"name": "a", "url": "https://a.dns/q", "country": "cn", "weight": 1.0, "proxy": False},
+        ]},
+    )
+    mocker.patch(
+        "dnsprobe.providers.doh.requests.get",
+        side_effect=requests.exceptions.ConnectionError(),
+    )
+
+    r = DoHResolver(cfg)
+    with pytest.raises(ResolverError):
+        r.resolve("github.com", cfg)
+
+
+def test_doh_resolver_uses_default_servers_when_dns_servers_empty(mocker):
+    """cfg.extra.dns_servers 空时，fallback 到内置默认列表（不抛错）。"""
+    cfg = ResolverConfig(name="doh", upstream_dns=[], extra={})  # dns_servers 缺省
+    response_wire = _build_doh_response("github.com", ["1.1.1.1"])
+    mocker.patch(
+        "dnsprobe.providers.doh.requests.get",
+        return_value=mocker.Mock(status_code=200, content=response_wire),
+    )
+
+    r = DoHResolver(cfg)
+    result = r.resolve("github.com", cfg)
+    assert result == ["1.1.1.1"]
+
+
+def test_doh_resolver_is_registered():
+    from dnsprobe.providers.doh import DoHResolver  # fixture pop 后本地重绑
+    assert get("doh") is DoHResolver
+
+
+def test_register_builtin_providers_adds_doh_to_registry():
+    _REGISTRY.pop("doh", None)
     register_builtin_providers()
-    assert "dnschecked" in _REGISTRY
-    assert _REGISTRY["dnschecked"].__name__ == "DnscheckedResolver"
+    assert "doh" in _REGISTRY
+    assert _REGISTRY["doh"].__name__ == "DoHResolver"
 
 
 def test_register_builtin_providers_is_idempotent():
-    """重复调用不抛错、不重复注册。"""
     register_builtin_providers()
     register_builtin_providers()
-    # 同一 class object 仍在 _REGISTRY
-    assert _REGISTRY["dnschecked"].__name__ == "DnscheckedResolver"
+    assert _REGISTRY["doh"].__name__ == "DoHResolver"

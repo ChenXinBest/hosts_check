@@ -19,7 +19,9 @@ def check_ip_reachable(
     method: str = "http_head",
     http_proxy: str = "",
 ) -> bool:
-    """通过 HTTP HEAD 检查 IP 是否可达，当前仅支持 http_head。"""
+    """通过 HTTP HEAD 检查 IP 是否可达。`method: "none"` 直接返回 True（跳过验证）。"""
+    if method == "none":
+        return True
     if method != "http_head":
         raise ValueError(f"unsupported reachability method: {method!r}")
 

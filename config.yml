@@ -1,15 +1,16 @@
 # 启用的 provider 列表（按顺序使用；name 必须是被 @register 注册过的）
 providers:
-  # dnschecked.com query_dns API 不接 dns 参数；upstream_dns 字段对本 provider 无意义
-  # （schema 保留以兼容其他可能支持多上游 DNS 的 provider）
-  - name: dnschecked
+  # DoH（DNS-over-HTTPS）resolver：
+  #  - 国内端点直连（阿里云、DNSPod）
+  #  - 美国权威端点默认走 HTTP 代理（Google、Cloudflare、Quad9、OpenDNS）
+  #  - 权重：美国权威 2.0，国内 1.0（高权重结果排前面）
+  # 自定义 dns_servers 见 plugins/README 或 README.md
+  - name: doh
     enabled: true
     upstream_dns: []
     extra:                      # provider 私有参数（透传到 ResolverConfig.extra）
-      # 按大洲/国家批量配置上游 DNS（数据源：dnschecked.com JS 数组）
-      # 默认北美洲（8.8.8.8 / 1.1.1.1 / OpenDNS / Quad9 等）；可加 countries 补充特定国家
-      continents: [north-america]
-      countries: []
+      dns_servers: []            # 留空 → 用 provider 内置默认列表（国内+美国权威）
+      http_proxy: ""             # 顶层 http_proxy 会被透传到这里
 
 # 写入目标
 output:
@@ -17,15 +18,18 @@ output:
   keep_old_section: true        # 是否保留 hosts.txt 中 ###start### 外的内容
 
 # 可达性检测
+# method: http_head   通过 HTTP HEAD 测连通（受本地网络限制，可能误判 GFW 拦截的 IP）
+# method: none        跳过检测，信任 DNS 解析结果（适合 GFW 区域生成 hosts.txt）
 reachability:
-  method: http_head             # 现阶段只支持 http_head，留扩展位
+  method: "none"
   timeout: 5.0
 
 # 并发：外层同时处理 N 个域名（pipeline.run 用 ThreadPoolExecutor）
-# provider 内部仍各自并发查 DNS（dnschecked 是 14 个 DNS 并发）
-# 总并发 ≈ N × 各 provider 的 max_workers
+# provider 内部仍各自并发查 DoH 端点
+# 总并发 ≈ N × DNS 服务器数
 concurrency: 8
 
 # HTTP 代理（直连时留空；走代理时填 http://host:port）
 # 透传给所有 provider 和 reachability 的 requests 调用
+# 走代理时还要确保 yaml 值用引号包住（避免 :// 被解析成 URL）
 http_proxy: ""

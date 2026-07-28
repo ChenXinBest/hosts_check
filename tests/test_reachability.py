@@ -67,6 +67,11 @@ def test_check_ip_reachable_rejects_unknown_method():
         check_ip_reachable("1.2.3.4", "example.com", method="ping")
 
 
+def test_check_ip_reachable_method_none_skips_check():
+    """method='none' 直接返回 True，不发请求。"""
+    assert check_ip_reachable("1.2.3.4", "example.com", method="none") is True
+
+
 def test_check_ip_reachable_logs_success_to_stdout(mocker, capsys):
     mocker.patch(
         "dnsprobe.reachability.requests.head",

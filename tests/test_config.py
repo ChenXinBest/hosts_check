@@ -20,7 +20,7 @@ def _write(path: Path, content: str) -> None:
 def test_load_config_minimal(tmp_path: Path):
     _write(
         tmp_path / "config.yml",
-        "providers:\n  - name: dnschecked\n",
+        "providers:\n  - name: doh\n",
     )
     _write(
         tmp_path / "domains.yml",
@@ -30,7 +30,7 @@ def test_load_config_minimal(tmp_path: Path):
     cfg = load_config(tmp_path / "config.yml")
 
     assert isinstance(cfg, AppConfig)
-    assert cfg.providers == [ProviderConfig(name="dnschecked")]
+    assert cfg.providers == [ProviderConfig(name="doh")]
     assert cfg.domains == ["a.example", "b.example"]
     assert cfg.output == OutputConfig()
     assert cfg.reachability == ReachabilityConfig()
@@ -39,7 +39,7 @@ def test_load_config_minimal(tmp_path: Path):
 def test_load_config_enabled_defaults_true(tmp_path: Path):
     _write(
         tmp_path / "config.yml",
-        "providers:\n  - name: dnschecked\n    upstream_dns: [1.1.1.1]\n",
+        "providers:\n  - name: doh\n    upstream_dns: [1.1.1.1]\n",
     )
     _write(tmp_path / "domains.yml", "domains: []\n")
 
@@ -54,7 +54,7 @@ def test_load_config_enabled_defaults_true(tmp_path: Path):
 def test_load_config_explicit_enabled_false(tmp_path: Path):
     _write(
         tmp_path / "config.yml",
-        "providers:\n  - name: dnschecked\n    enabled: false\n",
+        "providers:\n  - name: doh\n    enabled: false\n",
     )
     _write(tmp_path / "domains.yml", "domains: []\n")
 
