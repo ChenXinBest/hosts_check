@@ -84,6 +84,6 @@ def load_config(
         output=OutputConfig(**(cfg_raw.get("output") or {})),
         reachability=ReachabilityConfig(**(cfg_raw.get("reachability") or {})),
         domains=list(dom_raw.get("domains", []) or []),
-        concurrency=int(cfg_raw.get("concurrency", 8) or 8),
+        concurrency=max(1, int(cfg_raw.get("concurrency", 8) or 8)),
         http_proxy=str(cfg_raw.get("http_proxy", "") or "").strip(),
     )

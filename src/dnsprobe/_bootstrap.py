@@ -1,7 +1,7 @@
 """显式注册内置 provider。
 
-避免散落的 side-effect import：在 pipeline.run() / __main__.main() 入口显式调用
-register_builtin_providers()，让内置 ip33 注册进 _REGISTRY。幂等。
+避免散落的 side-effect import：在 pipeline.run() 入口显式调用
+register_builtin_providers()，让内置 doh 注册进 _REGISTRY。幂等。
 """
 from __future__ import annotations
 

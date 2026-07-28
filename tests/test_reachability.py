@@ -91,3 +91,45 @@ def test_check_ip_reachable_logs_timeout_to_stderr_or_stdout(mocker, capsys):
     assert check_ip_reachable("1.2.3.4", "example.com") is False
     captured = capsys.readouterr()
     assert "连接超时" in captured.out or "连接超时" in captured.err
+
+
+# ── IPv6 支持 ─────────────────────────────────────────────────────
+
+def test_format_host_for_url_ipv4():
+    """IPv4 地址不加方括号。"""
+    from dnsprobe.reachability import _format_host_for_url
+    assert _format_host_for_url("1.2.3.4") == "1.2.3.4"
+
+
+def test_format_host_for_url_ipv6():
+    """IPv6 地址加方括号（URL 格式要求）。"""
+    from dnsprobe.reachability import _format_host_for_url
+    assert _format_host_for_url("2001:db8::1") == "[2001:db8::1]"
+    assert _format_host_for_url("::1") == "[::1]"
+    assert _format_host_for_url("fe80::1%25eth0") == "[fe80::1%25eth0]"
+
+
+def test_check_ip_reachable_ipv6_uses_brackets(mocker):
+    """IPv6 地址在 HTTP 请求中用方括号包裹。"""
+    mock_head = mocker.patch(
+        "dnsprobe.reachability.requests.head",
+        return_value=mocker.Mock(status_code=200),
+    )
+    assert check_ip_reachable("2001:db8::1", "example.com") is True
+    call = mock_head.call_args
+    assert call.args[0] == "http://[2001:db8::1]"
+
+
+def test_filter_reachable_ipv6(mocker):
+    """filter_reachable 正确处理 IPv6 地址。"""
+    responses = [
+        mocker.Mock(status_code=200),  # reachable
+        mocker.Mock(status_code=500),  # not reachable
+    ]
+    mocker.patch(
+        "dnsprobe.reachability.requests.head",
+        side_effect=responses,
+    )
+    cfg = ReachabilityConfig(method="http_head", timeout=5.0)
+    result = filter_reachable(["2001:db8::1", "2001:db8::2"], "example.com", cfg)
+    assert result == ["2001:db8::1"]

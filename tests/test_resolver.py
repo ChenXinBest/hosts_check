@@ -329,3 +329,103 @@ def test_register_builtin_providers_is_idempotent():
     register_builtin_providers()
     register_builtin_providers()
     assert _REGISTRY["doh"].__name__ == "DoHResolver"
+
+
+# ── IPv6 / AAAA 支持 ──────────────────────────────────────────────
+
+def _build_doh_aaaa_response(domain: str, ips: list[str]) -> bytes:
+    """构造 AAAA 记录的 DoH 响应 wire bytes。"""
+    fqdn = domain if domain.endswith(".") else domain + "."
+    q = dns.message.make_query(fqdn, dns.rdatatype.AAAA)
+    msg = dns.message.make_response(q)
+    for ip in ips:
+        rrset = dns.rrset.from_text(fqdn, 300, dns.rdataclass.IN, dns.rdatatype.AAAA, ip)
+        msg.answer.append(rrset)
+    return msg.to_wire()
+
+
+def test_doh_resolver_aaaa_returns_ipv6_addresses(mocker):
+    """record_types=["AAAA"] 时返回 IPv6 地址。"""
+    cfg = ResolverConfig(
+        name="doh", upstream_dns=[],
+        extra={
+            "dns_servers": [
+                {"name": "mock", "url": "https://mock.dns/dns-query", "country": "us", "weight": 1.0, "proxy": False},
+            ],
+            "record_types": ["AAAA"],
+        },
+    )
+    response_wire = _build_doh_aaaa_response("github.com", ["2001:db8::1", "2001:db8::2"])
+    mocker.patch(
+        "dnsprobe.providers.doh.requests.get",
+        return_value=mocker.Mock(status_code=200, content=response_wire),
+    )
+
+    r = DoHResolver(cfg)
+    result = r.resolve("github.com", cfg)
+    assert result == ["2001:db8::1", "2001:db8::2"]
+
+
+def test_doh_resolver_dual_stack_returns_both_a_and_aaaa(mocker):
+    """record_types=["A", "AAAA"] 时同时返回 IPv4 和 IPv6。"""
+    cfg = ResolverConfig(
+        name="doh", upstream_dns=[],
+        extra={
+            "dns_servers": [
+                {"name": "mock", "url": "https://mock.dns/dns-query", "country": "us", "weight": 1.0, "proxy": False},
+            ],
+            "record_types": ["A", "AAAA"],
+        },
+    )
+
+    def dispatch(url, *a, **kw):
+        # 从 URL 中的 dns 参数判断查询类型
+        if "dns=" in url:
+            import base64
+            from urllib.parse import parse_qs, urlparse
+            qs = parse_qs(urlparse(url).query)
+            wire_b64 = qs["dns"][0]
+            # 补回 padding
+            wire_b64 += "=" * (-len(wire_b64) % 4)
+            query_wire = base64.urlsafe_b64decode(wire_b64)
+            query_msg = dns.message.from_wire(query_wire)
+            qtype = query_msg.question[0].rdtype
+            if qtype == dns.rdatatype.A:
+                return mocker.Mock(
+                    status_code=200,
+                    content=_build_doh_response("github.com", ["1.2.3.4"]),
+                )
+            elif qtype == dns.rdatatype.AAAA:
+                return mocker.Mock(
+                    status_code=200,
+                    content=_build_doh_aaaa_response("github.com", ["2001:db8::1"]),
+                )
+        return mocker.Mock(status_code=500, content=b"")
+
+    mocker.patch("dnsprobe.providers.doh.requests.get", side_effect=dispatch)
+
+    r = DoHResolver(cfg)
+    result = r.resolve("github.com", cfg)
+    # A 在前（先查），AAAA 在后
+    assert "1.2.3.4" in result
+    assert "2001:db8::1" in result
+    assert result.index("1.2.3.4") < result.index("2001:db8::1")
+
+
+def test_doh_resolver_default_record_types_is_a_only(mocker):
+    """不配置 record_types 时默认只查 A 记录。"""
+    from dnsprobe.providers.doh import _collect_record_types
+    cfg = ResolverConfig(name="doh", upstream_dns=[], extra={})
+    rdtypes = _collect_record_types(cfg)
+    assert rdtypes == [dns.rdatatype.A]
+
+
+def test_doh_resolver_unsupported_record_types_fallback_to_a(mocker):
+    """配置不支持的记录类型时回落到 A。"""
+    from dnsprobe.providers.doh import _collect_record_types
+    cfg = ResolverConfig(
+        name="doh", upstream_dns=[],
+        extra={"record_types": ["MX", "TXT"]},
+    )
+    rdtypes = _collect_record_types(cfg)
+    assert rdtypes == [dns.rdatatype.A]

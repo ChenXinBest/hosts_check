@@ -1,6 +1,6 @@
 # hosts_check
 
-解析 TMDB / GitHub 系列域名的可用 IP，生成 `hosts.txt`，绕过 DNS 污染。
+解析 TMDB / GitHub 系列域名的可用 IP，生成 `hosts.txt`，绕过 DNS 污染。支持 IPv4（A）和 IPv6（AAAA）记录。
 
 ## 使用
 
@@ -22,6 +22,19 @@
 - `domains.yml` —— 待解析的域名列表
 
 修改 `domains.yml` 即可定制自己的域名清单。
+
+### IPv6 支持
+
+在 `config.yml` 的 provider `extra` 中配置 `record_types`：
+
+```yaml
+providers:
+  - name: doh
+    extra:
+      record_types: ["A"]          # 仅 IPv4（默认）
+      # record_types: ["AAAA"]     # 仅 IPv6
+      # record_types: ["A", "AAAA"] # 双栈
+```
 
 ## 添加自定义 Provider
 
@@ -53,6 +66,8 @@ providers:
 ```
 
 详见 `plugins/README.md`。
+
+> **AI 工具用户**：项目根目录有 `SKILL.md`，是给 AI 编程助手（Cursor、Copilot、Mavis 等）看的插件开发指南，包含完整的接口说明、代码模板和测试要求。
 
 ## 开发
 

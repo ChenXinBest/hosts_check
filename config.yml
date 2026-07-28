@@ -10,7 +10,7 @@ providers:
     upstream_dns: []
     extra:                      # provider 私有参数（透传到 ResolverConfig.extra）
       dns_servers: []            # 留空 → 用 provider 内置默认列表（国内+美国权威）
-      http_proxy: ""             # 顶层 http_proxy 会被透传到这里
+      record_types: ["A"]        # 查询记录类型：["A"] IPv4 | ["AAAA"] IPv6 | ["A","AAAA"] 双栈
 
 # 写入目标
 output:
@@ -30,6 +30,7 @@ reachability:
 concurrency: 8
 
 # HTTP 代理（直连时留空；走代理时填 http://host:port）
-# 透传给所有 provider 和 reachability 的 requests 调用
-# 走代理时还要确保 yaml 值用引号包住（避免 :// 被解析成 URL）
+# 自动注入到所有 provider 的 extra["http_proxy"] 和 reachability 的 requests 调用
+# DoH provider 内部按 server.proxy 标志决定是否对单个端点使用代理
+# 走代理时确保 yaml 值用引号包住（避免 :// 被解析成 URL）
 http_proxy: ""
