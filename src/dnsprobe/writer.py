@@ -70,7 +70,7 @@ def write_hosts_file(
     path = Path(cfg.path)
     prefix = ""
     if cfg.keep_old_section and path.exists():
-        prefix = _strip_old_section(path.read_text(encoding="utf-8", newline=""))
+        prefix = _strip_old_section(path.read_text(encoding="utf-8"))
 
     body = _render_body(host_dict, now)
     path.parent.mkdir(parents=True, exist_ok=True)
