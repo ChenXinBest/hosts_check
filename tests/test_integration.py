@@ -67,7 +67,7 @@ def test_full_pipeline_with_third_party_plugin(
 
     import dnsprobe.pipeline as pl
 
-    monkeypatch.setattr(pl, "filter_reachable", lambda ips, domain, cfg: ips)
+    monkeypatch.setattr(pl, "filter_reachable", lambda ips, domain, cfg, http_proxy="": ips)
 
     cfg = load_config(tmp_path / "config.yml")
     rc = run(cfg, plugins_dir=plugins)
@@ -143,7 +143,7 @@ def test_pipeline_dedupes_ips_preserving_order(
 
     import dnsprobe.pipeline as pl
 
-    monkeypatch.setattr(pl, "filter_reachable", lambda ips, domain, cfg: ips)
+    monkeypatch.setattr(pl, "filter_reachable", lambda ips, domain, cfg, http_proxy="": ips)
 
     cfg = load_config(tmp_path / "config.yml")
     rc = run(cfg, plugins_dir=plugin)

@@ -18,7 +18,7 @@ def _log(msg: str) -> None:
 
 
 def _build_resolver_instances(
-    providers, plugins_dir: Path | None
+    providers, plugins_dir: Path | None, http_proxy: str = ""
 ) -> list[tuple[BaseResolver, ResolverConfig]]:
     register_builtin_providers()
     if plugins_dir is not None:
@@ -30,10 +30,14 @@ def _build_resolver_instances(
             continue
         try:
             cls = get(p.name)
+            extra = dict(p.extra)
+            # 顶层 http_proxy 注入到 extra，让 provider 通过 cfg.extra["http_proxy"] 读取
+            if http_proxy:
+                extra["http_proxy"] = http_proxy
             cfg = ResolverConfig(
                 name=p.name,
                 upstream_dns=list(p.upstream_dns),
-                extra=dict(p.extra),
+                extra=extra,
             )
             out.append((cls(cfg), cfg))
         except Exception as e:
@@ -67,7 +71,7 @@ def run(config: AppConfig, plugins_dir: Path | None = None) -> int:
     外层用 ThreadPoolExecutor 并发处理 N 个域名（`config.concurrency`）。
     provider 内部仍各自并发查 DNS（两层并发，总并发数 ≈ N × 各 provider 的 max_workers）。
     """
-    resolvers = _build_resolver_instances(config.providers, plugins_dir)
+    resolvers = _build_resolver_instances(config.providers, plugins_dir, http_proxy=config.http_proxy)
 
     raw: dict[str, list[str]] = defaultdict(list)
     if config.domains:
@@ -81,7 +85,7 @@ def run(config: AppConfig, plugins_dir: Path | None = None) -> int:
     filtered: dict[str, list[str]] = {}
     for domain, ips in raw.items():
         unique = list(dict.fromkeys(ips))
-        reachable = filter_reachable(unique, domain, config.reachability)
+        reachable = filter_reachable(unique, domain, config.reachability, config.http_proxy)
         if reachable:
             filtered[domain] = reachable
 

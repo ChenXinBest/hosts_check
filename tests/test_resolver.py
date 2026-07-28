@@ -211,6 +211,49 @@ def test_dnschecked_resolver_is_registered():
     assert get("dnschecked") is DnscheckedResolver
 
 
+def test_dnschecked_resolver_uses_http_proxy_when_configured(mocker):
+    """cfg.extra.http_proxy 设置时，requests.post 应带 proxies 参数。"""
+    cfg = ResolverConfig(
+        name="dnschecked", upstream_dns=[],
+        extra={"continents": ["asia"], "http_proxy": "http://proxy.example.com:8080"},
+    )
+    mock_post = mocker.patch(
+        "dnsprobe.providers.dnschecked.requests.post",
+        return_value=mocker.Mock(
+            status_code=200,
+            json=lambda: {"status_code": 200, "results": ["1.1.1.1"]},
+        ),
+    )
+    r = DnscheckedResolver(cfg)
+    r.resolve("github.com", cfg)
+
+    call = mock_post.call_args
+    assert call.kwargs["proxies"] == {
+        "http": "http://proxy.example.com:8080",
+        "https": "http://proxy.example.com:8080",
+    }
+
+
+def test_dnschecked_resolver_no_proxy_when_not_configured(mocker):
+    """cfg.extra.http_proxy 不设置时，proxies 应为 None（直连）。"""
+    cfg = ResolverConfig(
+        name="dnschecked", upstream_dns=[],
+        extra={"continents": ["asia"]},  # 不设 http_proxy
+    )
+    mock_post = mocker.patch(
+        "dnsprobe.providers.dnschecked.requests.post",
+        return_value=mocker.Mock(
+            status_code=200,
+            json=lambda: {"status_code": 200, "results": ["1.1.1.1"]},
+        ),
+    )
+    r = DnscheckedResolver(cfg)
+    r.resolve("github.com", cfg)
+
+    call = mock_post.call_args
+    assert call.kwargs["proxies"] is None
+
+
 def test_register_builtin_providers_adds_dnschecked_to_registry():
     """显式调用 register_builtin_providers() 后 _REGISTRY 含 dnschecked。"""
     _REGISTRY.pop("dnschecked", None)  # 先清理（防 fixture 残留）

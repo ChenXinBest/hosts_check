@@ -171,7 +171,7 @@ def test_pipeline_skips_provider_when_resolve_raises_unexpected_error(
     registry._REGISTRY["fake-unexpected"] = FakeResolver
     mocker.patch(
         "dnsprobe.pipeline.filter_reachable",
-        side_effect=lambda ips, domain, config: ips,
+        side_effect=lambda ips, domain, cfg, http_proxy="": ips,
     )
     cfg = AppConfig(
         providers=[

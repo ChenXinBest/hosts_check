@@ -164,14 +164,16 @@ def _collect_dns(cfg: ResolverConfig) -> list[str]:
     return out
 
 
-def _query_one(dns_server: str, domain: str) -> list[str]:
+def _query_one(dns_server: str, domain: str, http_proxy: str = "") -> list[str]:
     """调用 API 查询一个 DNS，返回 results IP 列表（失败返回空）。"""
+    proxies = {"http": http_proxy, "https": http_proxy} if http_proxy else None
     try:
         resp = requests.post(
             _API,
             json={"domain": domain, "record_type": "A", "dns_server": dns_server},
             headers=_HEADERS,
             timeout=_TIMEOUT,
+            proxies=proxies,
         )
         if resp.status_code != 200:
             return []
@@ -198,8 +200,11 @@ class DnscheckedResolver(BaseResolver):
                 f"countries={cfg.extra.get('countries')!r})"
             )
 
+        http_proxy = cfg.extra.get("http_proxy", "") or ""
         with ThreadPoolExecutor(max_workers=len(dns_list)) as pool:
-            futures = [pool.submit(_query_one, dns, domain) for dns in dns_list]
+            futures = [
+                pool.submit(_query_one, dns, domain, http_proxy) for dns in dns_list
+            ]
             per_dns_ips = [f.result() for f in futures]
 
         seen: set[str] = set()

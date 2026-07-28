@@ -138,3 +138,36 @@ def test_load_config_concurrency_override(tmp_path: Path):
     cfg = load_config(tmp_path / "config.yml")
 
     assert cfg.concurrency == 16
+
+
+def test_load_config_http_proxy_defaults_to_empty(tmp_path: Path):
+    _write(tmp_path / "config.yml", "providers: []\n")
+    _write(tmp_path / "domains.yml", "domains: []\n")
+
+    cfg = load_config(tmp_path / "config.yml")
+
+    assert cfg.http_proxy == ""
+
+
+def test_load_config_http_proxy_override(tmp_path: Path):
+    _write(
+        tmp_path / "config.yml",
+        "providers: []\nhttp_proxy: http://proxy.example.com:8080\n",
+    )
+    _write(tmp_path / "domains.yml", "domains: []\n")
+
+    cfg = load_config(tmp_path / "config.yml")
+
+    assert cfg.http_proxy == "http://proxy.example.com:8080"
+
+
+def test_load_config_http_proxy_strips_whitespace(tmp_path: Path):
+    _write(
+        tmp_path / "config.yml",
+        "providers: []\nhttp_proxy: '  http://proxy.example.com:8080  '\n",
+    )
+    _write(tmp_path / "domains.yml", "domains: []\n")
+
+    cfg = load_config(tmp_path / "config.yml")
+
+    assert cfg.http_proxy == "http://proxy.example.com:8080"

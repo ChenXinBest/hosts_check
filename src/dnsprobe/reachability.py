@@ -1,9 +1,15 @@
 """HTTP HEAD 测连通（迁移自 DailyJob.py:43-67）。"""
 from __future__ import annotations
 
+from typing import Optional
+
 import requests
 
 from dnsprobe.config import ReachabilityConfig
+
+
+def _proxies(http_proxy: Optional[str]) -> Optional[dict[str, str]]:
+    return {"http": http_proxy, "https": http_proxy} if http_proxy else None
 
 
 def check_ip_reachable(
@@ -11,6 +17,7 @@ def check_ip_reachable(
     domain: str,
     timeout: float = 5.0,
     method: str = "http_head",
+    http_proxy: str = "",
 ) -> bool:
     """通过 HTTP HEAD 检查 IP 是否可达，当前仅支持 http_head。"""
     if method != "http_head":
@@ -22,6 +29,7 @@ def check_ip_reachable(
             headers={"Host": domain},
             timeout=timeout,
             allow_redirects=True,
+            proxies=_proxies(http_proxy),
         )
         reachable = 200 <= response.status_code < 400
         print(
@@ -41,9 +49,9 @@ def check_ip_reachable(
 
 
 def filter_reachable(
-    ips: list[str], domain: str, cfg: ReachabilityConfig
+    ips: list[str], domain: str, cfg: ReachabilityConfig, http_proxy: str = ""
 ) -> list[str]:
     """过滤出可达的 IP，按原顺序保留。"""
     return [
-        ip for ip in ips if check_ip_reachable(ip, domain, cfg.timeout, cfg.method)
+        ip for ip in ips if check_ip_reachable(ip, domain, cfg.timeout, cfg.method, http_proxy)
     ]

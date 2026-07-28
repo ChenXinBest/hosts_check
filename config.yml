@@ -25,3 +25,7 @@ reachability:
 # provider 内部仍各自并发查 DNS（dnschecked 是 14 个 DNS 并发）
 # 总并发 ≈ N × 各 provider 的 max_workers
 concurrency: 8
+
+# HTTP 代理（直连时留空；走代理时填 http://host:port）
+# 透传给所有 provider 和 reachability 的 requests 调用
+http_proxy: ""

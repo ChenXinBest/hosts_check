@@ -35,6 +35,7 @@ class AppConfig:
     reachability: ReachabilityConfig
     domains: list[str]
     concurrency: int = 8  # 外层：同时处理 N 个域名；provider 内仍各自并发查 DNS
+    http_proxy: str = ""   # HTTP 代理 URL（形如 http://host:port）；空表示直连
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -84,4 +85,5 @@ def load_config(
         reachability=ReachabilityConfig(**(cfg_raw.get("reachability") or {})),
         domains=list(dom_raw.get("domains", []) or []),
         concurrency=int(cfg_raw.get("concurrency", 8) or 8),
+        http_proxy=str(cfg_raw.get("http_proxy", "") or "").strip(),
     )
