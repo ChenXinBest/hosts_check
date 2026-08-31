@@ -1,3 +1,5 @@
+
+
 # hosts_check
 
 解析 TMDB / GitHub 系列域名的可用 IP，生成 `hosts.txt`，绕过 DNS 污染。支持 IPv4（A）和 IPv6（AAAA）记录。
@@ -8,6 +10,7 @@
 - **手动运行**：
   ```bash
   pip install -r requirements.txt
+  pip install -e .
   python -m dnsprobe
   ```
   或装包后直接：
